@@ -186,9 +186,18 @@ Pick from these based on what Iteration 1 taught:
   sources in this order:
   1. 8-K earnings press releases (Exhibit 99.1) via edgartools: free, published by the company,
      same library as `fetch`
-  2. Claude's server-side web search tool, limited to chosen domains (e.g. company IR pages,
-     Reuters). It's billed per search on top of tokens, so check pricing first.
-  3. A news API, only if 1 and 2 fall short (usually paid; licences often restrict republishing)
+  2. NewsAPI.org free Developer plan (`NEWSAPI_KEY` in `.env`). Limits checked 2026-09-15:
+     - 100 requests per day
+     - articles arrive 24 hours late
+     - search goes back 1 month
+     - returns headline, description and URL only, not full text
+     - development and testing only: not allowed in staging or production
+
+     This is fine for local runs. Claims must stick to what the headline or description says, and
+     a hosted live demo would need a paid plan. Record one response as a test fixture.
+  3. Claude's server-side web search tool, limited to chosen domains (e.g. company IR pages,
+     Reuters), if 1 and 2 fall short. It's billed per search on top of tokens, so check pricing
+     first.
 
   Rules for anything from news:
   - It supplies words only, never numbers; the existing digit check already enforces this.
