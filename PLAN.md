@@ -186,15 +186,21 @@ Pick from these based on what Iteration 1 taught:
   sources in this order:
   1. 8-K earnings press releases (Exhibit 99.1) via edgartools: free, published by the company,
      same library as `fetch`
-  2. NewsAPI.org free Developer plan (`NEWSAPI_KEY` in `.env`). Limits checked 2026-09-15:
-     - 100 requests per day
-     - articles arrive 24 hours late
-     - search goes back 1 month
-     - returns headline, description and URL only, not full text
-     - development and testing only: not allowed in staging or production
+  2. A news index, chosen by `news_source` in `config.yaml` behind one shared interface:
 
-     This is fine for local runs. Claims must stick to what the headline or description says, and
-     a hosted live demo would need a paid plan. Record one response as a test fixture.
+     | | NewsAPI.org free plan (`newsapi`) | GDELT (`gdelt`) |
+     |---|---|---|
+     | Use it for | Local runs | Any hosted or live demo |
+     | Cost | $0 (paid plans start at $449/month) | $0 |
+     | Terms | "development and testing in a development environment only… cannot be used in a staging or production environment (including internally)". There's no exception for personal or non-commercial projects. | "unlimited and unrestricted use for any academic, commercial, or governmental use" |
+     | Obligations | Don't republish article text | Cite the GDELT Project and link gdeltproject.org in the memo footer |
+     | Returns | Headline, description, URL | Headline, URL, topic/tone data |
+     | Limits | 100 requests/day, 24-hour delay, 1-month history | — |
+     | Setup | `NEWSAPI_KEY` in `.env` | No key |
+
+     Terms for both were checked 2026-09-15. Neither returns full article text, so claims must
+     stick to what the headline or description says. Record one response from each as a test
+     fixture.
   3. Claude's server-side web search tool, limited to chosen domains (e.g. company IR pages,
      Reuters), if 1 and 2 fall short. It's billed per search on top of tokens, so check pricing
      first.
