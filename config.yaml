@@ -1,0 +1,14 @@
+# Settings for a run. Secrets (API keys) go in .env, not here.
+
+# Which Claude model to use, and what it costs in USD per million tokens.
+# Check current prices at https://platform.claude.com/docs/en/pricing before changing.
+model: claude-opus-5
+price_per_million_tokens:
+  input: 5.00
+  output: 25.00
+
+# Stop a run once it has spent more than this.
+max_usd_per_run: 1.00
+
+# How many more times `write` may try after `check` finds problems in a draft.
+max_retries: 2

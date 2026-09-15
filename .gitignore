@@ -3,10 +3,8 @@
 .env.*
 !.env.example
 
-# SEC cache and run bundles (regenerable)
-data/
-runs/
-!data/.gitkeep
+# Saved memos (regenerable)
+runs/*
 !runs/.gitkeep
 
 # Python
