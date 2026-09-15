@@ -11,6 +11,7 @@ python -m fin_analyst MSFT "How liquid is Microsoft, and what drives its return 
 ```
 
 That command produces a short markdown memo answering the question from Microsoft's latest 10-K.
+Iteration 1 uses SEC filings only, with no web or news search (that comes in Iteration 2, §6).
 **Every number in the memo comes from the filing via Python. Claude never types a number.**
 
 This is not investment advice: no price targets, no buy/sell calls.
@@ -181,6 +182,19 @@ Pick from these based on what Iteration 1 taught:
 - Multiple years across several filings, with restatement handling
 - Cite MD&A and risk-factor passages (retrieval, reusing the textbook-kb stack), plus a
   claim-support check
+- **Recent news and commentary**, as one new `news` node between `compute` and `write`. Add the
+  sources in this order:
+  1. 8-K earnings press releases (Exhibit 99.1) via edgartools: free, published by the company,
+     same library as `fetch`
+  2. Claude's server-side web search tool, limited to chosen domains (e.g. company IR pages,
+     Reuters). It's billed per search on top of tokens, so check pricing first.
+  3. A news API, only if 1 and 2 fall short (usually paid; licences often restrict republishing)
+
+  Rules for anything from news:
+  - It supplies words only, never numbers; the existing digit check already enforces this.
+  - Every claim carries a source link and publication date.
+  - The memo shows news in its own section, labelled with its dates, so it isn't mixed up with the
+    10-K's fiscal period.
 - A per-run trace file and more evals (a hand-checked gold set, claim grading)
 - Averages instead of ending balances; solvency and cash-flow metrics
 - Banks and insurers (current ratio doesn't apply)
