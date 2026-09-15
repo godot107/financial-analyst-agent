@@ -1,0 +1,49 @@
+# financial-analyst-agent
+
+A LangGraph workflow that answers a question about one company with a short memo built from its
+latest 10-K. Claude writes the words; Python computes every number.
+Trello #87: https://trello.com/c/O2wlT16g
+
+**Status:** Iteration 1 planned; Step 0 (scaffold) is next. `PLAN.md` is the build spec. Work its steps in
+order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
+
+## Build / run
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env              # ANTHROPIC_API_KEY, SEC_USER_AGENT
+pytest                            # no network, no API key needed
+python -m fin_analyst MSFT "How liquid is Microsoft?"
+```
+
+Project-local `.venv`. Local only: no AWS or Bedrock.
+
+## Rules
+
+- **Claude never writes a number.** Metrics come from `metrics.py`, and the memo uses
+  `{{metric:year}}` / `{{metric:year->year}}` placeholders that `memo.render` fills. A digit
+  outside a placeholder fails the check.
+- **Only `llm.py`, `graph.py` and `__main__.py` may import `anthropic` or `fin_analyst.llm`.**
+  `tests/test_llm_isolation.py` enforces this.
+- **A missing input gives `None` with a reason, never a guessed value.**
+- **Tests never hit the network or the API.** Use fixtures in `tests/fixtures/` and a fake client.
+- **Ask Willie before any live Claude run**, and state the estimated cost. The budget guard
+  (`max_usd_per_run` in `config.yaml`) stays on.
+- Model: `claude-opus-5` with adaptive thinking and refusal fallbacks. Switching to a cheaper
+  model is Willie's call.
+- Keep code plain and commented for a reader learning the pattern. Prefer a flat module over a
+  new abstraction.
+
+## Key decisions
+
+- **LangGraph for orchestration, the `anthropic` SDK for model calls** (no `langchain-anthropic`).
+  The graph is the readable part; the raw SDK keeps each call explicit.
+- **Pre-written ratio functions, not model-generated code.**
+- **edgartools / XBRL rather than PDF parsing.**
+- Real public filings only. Not investment advice.
+
+## Related
+
+- `../congress-signal`: LLM-isolation test pattern, `SEC_USER_AGENT`
+- `../textbook-kb`: ratio definitions (Berk & DeMarzo Ch. 2); retrieval stack for Iteration 2
