@@ -26,7 +26,16 @@ Project-local `.venv`. Local only: no AWS or Bedrock.
   outside a placeholder fails the check.
 - **Only `llm.py`, `graph.py` and `__main__.py` may import `anthropic` or `fin_analyst.llm`.**
   `tests/test_llm_isolation.py` enforces this.
-- **A missing input gives `None` with a reason, never a guessed value.**
+- **The words have rules too** (`PLAN.md` §2): year-over-year framing, no business reasons in
+  Iteration 1, no rules of thumb, about 250 words. Prose from memory is the remaining risk once
+  numbers are placeholders.
+- **A missing input gives `None` with a reason, never a guessed value.** The one exception:
+  short-term investments, receivables and debt lines that aren't reported count as 0, labelled
+  in the memo footer.
+- **Ratio definitions follow the textbooks cited in `PLAN.md` Step 2.** Use parent-only net
+  income and equity. Quick ratio = (cash + short-term investments + receivables) / current
+  liabilities. Debt = the sum of the debt lines, never total liabilities.
+- **Every run saves a JSON run record in `runs/`**, even when no memo is produced.
 - **Tests never hit the network or the API.** Use fixtures in `tests/fixtures/` and a fake client.
 - **Ask Willie before any live Claude run**, and state the estimated cost. The budget guard
   (`max_usd_per_run` in `config.yaml`) stays on.
