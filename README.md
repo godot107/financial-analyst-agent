@@ -14,7 +14,7 @@ computes every ratio, and fills in every figure. A checker rejects any draft whe
 a number itself, and a second Claude call verifies that each cited explanation is actually in the
 passage it cites.
 
-170 tests, none of which touch the network or need an API key. A memo costs a few cents.
+188 tests, none of which touch the network or need an API key. A memo costs a few cents.
 
 ## How it works
 
@@ -158,6 +158,18 @@ python -m fin_analyst MSFT "How liquid is Microsoft?" --chat
 Follow-ups reuse the filing (the SEC is hit once) and see the earlier answers. Each turn resends
 those answers, so every turn costs a little more than the last — hence a hard ceiling of **5 turns**
 and a single budget shared across the whole conversation, not per turn.
+
+## As a service
+
+```bash
+python -m fin_analyst.server      # needs FIN_ANALYST_API_KEYS; see QUICKSTART
+```
+
+A memo takes 30–90 seconds, longer than an API gateway will hold a request open, so the service
+takes a job and answers at once: `POST /v1/memos` returns `202` and an id, `GET /v1/memos/{id}`
+returns the memo when it's ready. Every route but health needs a key, and daily spending caps are
+checked when a job is submitted, before any Claude call. See [`docs/API_PLAN.md`](docs/API_PLAN.md)
+for the design and what deploying it involves.
 
 ## Two helpers for repetitive work
 

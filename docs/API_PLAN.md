@@ -1,6 +1,6 @@
 # Plan: serving the analyst as an API
 
-Status: **planned, not built.** Iteration 3. The CLI and batch runner work today; this plans the
+Status: **Phase A built** (local service, tested, containerised). Phases B and C planned. Iteration 3. The CLI and batch runner work today; this plans the
 same workflow behind an HTTP interface so other systems can ask for memos.
 
 ## What the service is, and is not
@@ -42,7 +42,7 @@ kept writing numbers itself and nothing was published — the design working.
 
 ## Phases
 
-### Phase A — local service (free to run, apart from the memos)
+### Phase A — local service (free to run, apart from the memos) ✅
 
 - FastAPI app exposing the routes above over the existing `run_analysis` / `run_batch` / coverage
   code. No change to the workflow itself.
@@ -57,6 +57,22 @@ kept writing numbers itself and nothing was published — the design working.
 
 **Done when:** a local client submits a memo, polls it to completion, and a request over the cap is
 refused before any Claude call is made.
+
+**As built:** `fin_analyst/service.py` (routes and worker), `fin_analyst/jobs.py` (SQLite ledger),
+`fin_analyst/server.py` (entry point), a `Dockerfile`. 18 tests drive it with the fake analyst.
+Caps count a queued job at its **estimate** and a finished one at its **real cost**; counting only
+finished jobs would let a burst of submissions all pass the check and then all spend. A refusal is a
+`429` naming the cap, the remaining allowance and the reset time, and the tests assert no analyst
+was even constructed. Someone else's job id returns `404`, not `403`, so an id confirms nothing.
+
+The image (813 MB) was smoke-tested without spending: no `.env` inside it, runs as a non-root user,
+exits with a clear message when `FIN_ANALYST_API_KEYS` is missing or a secret is under 16
+characters, answers `401` without a key and `422` for a malformed ticker, and serves the free
+coverage route live from EDGAR. The end-to-end memo through the container is the one step left,
+because it spends money.
+
+Note for Phase B: the image is large (pandas, edgartools, LangGraph), so expect cold starts of
+several seconds on Lambda. That is harmless here — submission and work are separate invocations.
 
 ### Phase B — AWS, private to the account
 

@@ -1,0 +1,16 @@
+# Secrets must never be baked into an image.
+.env
+.env.*
+!.env.example
+
+.venv/
+.git/
+runs/
+tests/
+evals/
+examples/
+docs/
+scripts/
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -33,7 +33,7 @@ costs a few cents.
 ## 3. Check the setup without spending anything
 
 ```bash
-pytest                                              # 170 tests, no network, no API key
+pytest                                              # 188 tests, no network, no API key
 python -m fin_analyst MSFT "How liquid is it?" --dry-run
 python scripts/coverage.py MSFT                     # reads the filing, calls no model
 ```
@@ -85,6 +85,35 @@ python scripts/batch.py "How liquid is it?" MSFT COST JPM --max-usd 0.30
 # cheaper: skip the filing's narrative, or the claim check
 python -m fin_analyst MSFT "How liquid is it?" --no-text --no-verify
 ```
+
+## Run it as a service
+
+```bash
+# name=secret pairs; it refuses to start without one
+export FIN_ANALYST_API_KEYS="me=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+python -m fin_analyst.server                          # http://127.0.0.1:8000/docs
+```
+
+```bash
+KEY=...   # the secret part of FIN_ANALYST_API_KEYS
+curl -s -X POST http://127.0.0.1:8000/v1/memos -H "X-API-Key: $KEY" \
+     -H 'content-type: application/json' \
+     -d '{"ticker": "MSFT", "question": "How liquid is it?"}'
+# -> 202 {"id": "...", "status_url": "/v1/memos/...", "estimate_usd": 0.06}
+
+curl -s http://127.0.0.1:8000/v1/memos/<id> -H "X-API-Key: $KEY"   # poll until done or failed
+curl -s http://127.0.0.1:8000/v1/coverage/MSFT -H "X-API-Key: $KEY" # free, immediate
+```
+
+Or as a container:
+
+```bash
+docker build -t fin-analyst .
+docker run --rm -p 127.0.0.1:8000:8000 --env-file .env fin-analyst
+```
+
+Daily caps per key and overall live under `api:` in `config.yaml` ($1 and $3 by default), and are
+checked when a job is submitted, before anything is spent.
 
 ## When something goes wrong
 

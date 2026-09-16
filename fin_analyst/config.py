@@ -33,6 +33,8 @@ class Settings:
     max_retries: int
     chat_max_turns: int
     sec_user_agent: str | None  # SEC rejects downloads without one
+    api_per_key_daily_usd: float = 1.00  # the HTTP service's caps, per UTC day
+    api_global_daily_usd: float = 3.00
 
     def cost_usd(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """What one call cost. Thinking tokens are billed as output."""
@@ -63,12 +65,16 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         max_retries=int(raw["max_retries"]),
         chat_max_turns=int(raw.get("chat_max_turns", CHAT_TURN_CEILING)),
         sec_user_agent=os.environ.get("SEC_USER_AGENT") or None,
+        api_per_key_daily_usd=float(raw.get("api", {}).get("per_key_daily_usd", 1.00)),
+        api_global_daily_usd=float(raw.get("api", {}).get("global_daily_usd", 3.00)),
     )
 
     if settings.max_usd_per_run <= 0:
         raise ValueError("max_usd_per_run must be greater than 0")
     if settings.max_retries < 0:
         raise ValueError("max_retries cannot be negative")
+    if settings.api_per_key_daily_usd <= 0 or settings.api_global_daily_usd <= 0:
+        raise ValueError("api daily caps must be greater than 0")
     if not 1 <= settings.chat_max_turns <= CHAT_TURN_CEILING:
         raise ValueError(f"chat_max_turns must be between 1 and {CHAT_TURN_CEILING}")
     for name, node in settings.nodes.items():

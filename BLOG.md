@@ -140,7 +140,7 @@ It is not investment advice, and it produces no price targets.
 ---
 
 *Built with Claude Code — the design decisions, review and evaluation are mine, most of the code is
-model-written. 170 tests, none of which touch the network or an API key. Code:
+model-written. 188 tests, none of which touch the network or an API key. Code:
 [github.com/godot107/financial-analyst-agent](https://github.com/godot107/financial-analyst-agent)*
 
 ---

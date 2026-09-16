@@ -1,4 +1,4 @@
-"""Only llm.py, graph.py and __main__.py may talk to Claude.
+"""Only llm.py, graph.py, __main__.py and server.py may talk to Claude.
 
 Everything else (fetching facts, computing ratios, checking and rendering the memo) must work
 without a model. That is what guarantees no number in the memo came from one.
@@ -8,7 +8,8 @@ import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent.parent / "fin_analyst"
-ALLOWED = {"llm.py", "graph.py", "__main__.py"}
+# server.py builds the real analyst for the HTTP service, as __main__ does for the CLI.
+ALLOWED = {"llm.py", "graph.py", "__main__.py", "server.py"}
 FORBIDDEN = ("anthropic", "fin_analyst.llm")
 
 

@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built. 170 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service, `fin_analyst/service.py`) is built — see `docs/API_PLAN.md`. 188 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -23,6 +23,7 @@ python -m fin_analyst MSFT "How liquid is Microsoft?" --chat      # up to 5 foll
 python -m fin_analyst MSFT "Compare with Alphabet" --peer GOOGL   # two companies
 python -m fin_analyst MSFT "Why did margins move?" --no-text      # ratios only, no narrative
 python scripts/coverage.py MSFT COST            # which tags matched; free to run
+python -m fin_analyst.server                    # HTTP service; needs FIN_ANALYST_API_KEYS
 python scripts/batch.py "How liquid is it?" MSFT COST --dry-run
 python -m fin_analyst MSFT "..." --dry-run                        # spends nothing
 ```
@@ -34,7 +35,7 @@ Project-local `.venv`. Local only: no AWS or Bedrock.
 - **Claude never writes a number.** Metrics come from `metrics.py`, and the memo uses
   `{{metric:year}}` / `{{metric:year->year}}` placeholders that `memo.render` fills. A digit
   outside a placeholder fails the check.
-- **Only `llm.py`, `graph.py` and `__main__.py` may import `anthropic` or `fin_analyst.llm`.**
+- **Only `llm.py`, `graph.py`, `__main__.py` and `server.py` may import `anthropic` or `fin_analyst.llm`.**
   `tests/test_llm_isolation.py` enforces this.
 - **The words have rules too** (`PLAN.md` §2): year-over-year framing, no business reasons in
   Iteration 1, no rules of thumb, about 250 words. Prose from memory is the remaining risk once
