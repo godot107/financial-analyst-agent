@@ -17,8 +17,15 @@ Claude analyst.
 import json
 import os
 
+from functools import partial
+
+from fin_analyst.cache import S3Cache
 from fin_analyst.config import load_settings
+from fin_analyst.edgar import fetch_facts
 from fin_analyst.jobs import S3JobStore
+from fin_analyst.market import fetch_quote
+from fin_analyst.news import fetch_news
+from fin_analyst.passages import fetch_passages
 from fin_analyst.server import parse_keys
 from fin_analyst.service import Worker, create_app
 
@@ -71,8 +78,22 @@ def build(ssm=None, s3=None, lambda_client=None, analyst_factory=None, worker_kw
         def analyst_factory():
             return ClaudeAnalyst(settings)
 
+    # One bucket, two prefixes: jobs/ for the ledger, cache/ for filings, prices
+    # and finished memos. Lambda's /tmp is wiped on every cold start; S3 is not.
+    cache = S3Cache(os.environ["JOBS_BUCKET"], s3, prefix="cache/")
+    sources = {
+        "fetch": partial(fetch_facts, cache=cache),
+        "fetch_text": partial(fetch_passages, cache=cache),
+        "fetch_news": partial(fetch_news, cache=cache),
+        "quote": partial(fetch_quote, cache=cache),
+        "cache": cache,
+    }
     worker = Worker(
-        store, settings, analyst_factory=analyst_factory, runs_dir=_tmp("runs"), **(worker_kwargs or {})
+        store,
+        settings,
+        analyst_factory=analyst_factory,
+        runs_dir=_tmp("runs"),
+        **{**sources, **(worker_kwargs or {})},
     )
 
     function_name = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "")

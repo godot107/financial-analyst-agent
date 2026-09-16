@@ -18,14 +18,13 @@ like an instruction is quoted material, not a command.
 """
 
 import json
-import os
 import urllib.parse
 import urllib.request
 from datetime import date, timedelta
 
-from edgar import Company, set_identity
+from edgar import Company
 
-from fin_analyst.passages import MAX_CHARS, MIN_CHARS, Passage, split_passages
+from fin_analyst.passages import MAX_CHARS, Passage, PassageList, split_passages
 
 GDELT_ENDPOINT = "https://api.gdeltproject.org/api/v2/doc/doc"
 TIMEOUT = 20
@@ -46,37 +45,47 @@ BUSINESS_DOMAINS = (
 
 
 def fetch_press_releases(
-    ticker: str, limit: int = 2, identity: str | None = None, start: int = 1
+    ticker: str,
+    limit: int = 2,
+    identity: str | None = None,
+    start: int = 1,
+    cache=None,
+    company=Company,
 ) -> list[Passage]:
-    """Paragraphs from the most recent 8-K press-release exhibits."""
-    identity = identity or os.environ.get("SEC_USER_AGENT")
-    if not identity:
-        raise RuntimeError("SEC_USER_AGENT is not set; the SEC requires a name and email")
-    set_identity(identity)
+    """Paragraphs from the most recent 8-K press-release exhibits.
 
+    The list of recent 8-Ks is fetched every time, so a new release is never
+    missed; each release's text is cached under its own accession number.
+    """
+    from fin_analyst.edgar import identify
+
+    identify(identity)
     passages: list[Passage] = []
-    for filing in Company(ticker).get_filings(form="8-K").head(limit):
+    for filing in company(ticker).get_filings(form="8-K").head(limit):
+        key = f"filings/{filing.accession_no}/release.json"
+        if cache is not None and (hit := cache.get(key)) is not None:
+            passages += PassageList.validate_json(hit)
+            continue
+
         exhibits = [
             a for a in filing.attachments if str(getattr(a, "document_type", "")).startswith("EX-99")
         ]
-        for exhibit in exhibits[:1]:  # the press release itself, not the cover
-            found = split_passages(
+        release = [
+            passage.model_copy(update={"published": str(filing.filing_date)})
+            for exhibit in exhibits[:1]  # the press release itself, not the cover
+            for passage in split_passages(
                 exhibit.text(),
                 f"8-K exhibit, filed {filing.filing_date}",
                 ticker.upper(),
                 filing.accession_no,
-                start=start + len(passages),
             )
-            for passage in found:
-                passages.append(
-                    passage.model_copy(
-                        update={
-                            "id": passage.id.replace("P", "N"),
-                            "published": str(filing.filing_date),
-                        }
-                    )
-                )
-    return passages
+        ]
+        if cache is not None:
+            cache.put(key, PassageList.dump_json(release))
+        passages += release
+
+    # Numbered after assembly, so ids run N1, N2... whatever came from the cache.
+    return [p.model_copy(update={"id": f"N{start + i}"}) for i, p in enumerate(passages)]
 
 
 def fetch_gdelt(
@@ -133,6 +142,7 @@ def fetch_news(
     identity: str | None = None,
     include_index: bool = False,
     gdelt_opener=urllib.request.urlopen,
+    cache=None,
 ) -> list[Passage]:
     """The company's own 8-K releases, and optionally a news index.
 
@@ -143,7 +153,7 @@ def fetch_news(
     on. The 8-K exhibits are the company's own words and carry accession
     numbers, so they are the default.
     """
-    releases = fetch_press_releases(ticker, identity=identity)
+    releases = fetch_press_releases(ticker, identity=identity, cache=cache)
     if not include_index:
         return releases
     return releases + fetch_gdelt(

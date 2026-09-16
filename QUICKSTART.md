@@ -33,7 +33,7 @@ costs a few cents.
 ## 3. Check the setup without spending anything
 
 ```bash
-pytest                                              # 197 tests, no network, no API key
+pytest                                              # 228 tests, no network, no API key
 python -m fin_analyst MSFT "How liquid is it?" --dry-run
 python scripts/coverage.py MSFT                     # reads the filing, calls no model
 ```
@@ -82,6 +82,9 @@ python -m fin_analyst MSFT "How liquid is it?" --chat
 # one question across a watchlist
 python scripts/batch.py "How liquid is it?" MSFT COST JPM --max-usd 0.30
 
+# filings are cached in cache/ by accession number; to fetch fresh:
+python -m fin_analyst MSFT "How liquid is it?" --no-cache
+
 # cheaper: skip the filing's narrative, or the claim check
 python -m fin_analyst MSFT "How liquid is it?" --no-text --no-verify
 ```
@@ -102,6 +105,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/memos -H "X-API-Key: $KEY" \
 # -> 202 {"id": "...", "status_url": "/v1/memos/...", "estimate_usd": 0.06}
 
 curl -s http://127.0.0.1:8000/v1/memos/<id> -H "X-API-Key: $KEY"   # poll until done or failed
+# add "reuse": true to get an earlier identical memo for $0.00, if the filing hasn't changed
 curl -s http://127.0.0.1:8000/v1/coverage/MSFT -H "X-API-Key: $KEY" # free, immediate
 ```
 

@@ -143,6 +143,33 @@ fast routes only), keys issued per caller, rate limits, and a public tier restri
 memos (`--no-text --no-verify`, ~$0.03) with a small global daily cap. A web application firewall
 adds a monthly charge; price it before adding it.
 
+## Caching
+
+Measured first, because it changes what is worth caching. SEC fetches for a memo took **3.6 s cold
+and 1.1 s warm**; the memo itself took **27 s and $0.049**. SEC data is free, so caching filings
+saves time and SEC traffic but no money. The money is in not writing the same memo twice.
+
+| What | Key | Why it is never stale | Kept |
+|---|---|---|---|
+| Facts and 10-K text | accession number | a filing never changes; an amendment is a new accession number | 365 days |
+| 8-K releases | accession number, each | same | 365 days |
+| Share price | ticker + day | a daily close | 7 days |
+| Finished memo | hash of question, options, accession numbers, code fingerprint (+ day if it used news or a price) | anything that could change the memo changes the key | 90 days |
+
+- **Which filing is latest is looked up every time.** Only a filing's content is cached, so a new
+  10-K is never hidden behind an old one.
+- **The code fingerprint is a hash of the source** that writes and checks memos, plus `config.yaml`.
+  A changed prompt stops every old key matching without anyone remembering to bump a version.
+- **Memo reuse is opt-in** (`"reuse": true`). Every published memo is kept either way; a failed one
+  never is. A reused memo costs $0.00 and names the job it came from.
+- **Where:** a `cache/` folder locally, the same bucket's `cache/` prefix on Lambda, with lifecycle
+  rules per prefix. S3 because it costs nothing idle and the bucket already exists; ElastiCache bills
+  hourly, EFS needs a VPC and so a NAT gateway (~$32/month) to reach SEC and Anthropic, and Lambda's
+  `/tmp` is wiped on every cold start.
+
+Measured locally on Costco: 2.4 s to fetch facts and text the first time, under a hundredth of a
+second the second.
+
 ## Rough costs
 
 | | Per memo |

@@ -8,14 +8,20 @@ This is the one place besides __main__ that builds the real Claude analyst.
 
 import os
 import sys
+from functools import partial
 
 import uvicorn
 from dotenv import load_dotenv
 
+from fin_analyst.cache import LocalCache
 from fin_analyst.config import PROJECT_ROOT, load_settings
+from fin_analyst.edgar import fetch_facts
 from fin_analyst.graph import RUNS
 from fin_analyst.jobs import JobStore
 from fin_analyst.llm import ClaudeAnalyst
+from fin_analyst.market import fetch_quote
+from fin_analyst.news import fetch_news
+from fin_analyst.passages import fetch_passages
 from fin_analyst.service import Worker, create_app
 
 
@@ -43,7 +49,17 @@ def main() -> int:
     settings = load_settings()
     RUNS.mkdir(parents=True, exist_ok=True)
     store = JobStore(os.environ.get("FIN_ANALYST_JOBS_DB", str(RUNS / "jobs.sqlite3")))
-    worker = Worker(store, settings, analyst_factory=lambda: ClaudeAnalyst(settings))
+    cache = LocalCache(PROJECT_ROOT / "cache")
+    worker = Worker(
+        store,
+        settings,
+        analyst_factory=lambda: ClaudeAnalyst(settings),
+        fetch=partial(fetch_facts, cache=cache),
+        fetch_text=partial(fetch_passages, cache=cache),
+        fetch_news=partial(fetch_news, cache=cache),
+        quote=partial(fetch_quote, cache=cache),
+        cache=cache,
+    )
     app = create_app(store, settings, keys, worker, run_worker=True)
 
     uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))

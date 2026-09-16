@@ -18,7 +18,9 @@ No LLM import here: the analyst arrives through a factory, as everywhere else.
 """
 
 import hmac
+import json
 import threading
+from datetime import date
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable
@@ -28,8 +30,9 @@ from pydantic import BaseModel, Field
 
 from fin_analyst.batch import ESTIMATE_PER_MEMO, run_batch
 from fin_analyst.config import Settings
+from fin_analyst.cache import code_version, memo_key
 from fin_analyst.coverage import concerns, line_item_coverage, metric_coverage
-from fin_analyst.edgar import fetch_facts
+from fin_analyst.edgar import fetch_facts, latest_accession
 from fin_analyst.graph import RUNS, run_analysis
 from fin_analyst.jobs import Job, JobStore, next_reset
 from fin_analyst.market import fetch_quote
@@ -49,6 +52,9 @@ class MemoRequest(BaseModel):
     verify: bool = True  # check that citations hold
     news: bool = False  # add recent 8-K press releases
     market: bool = False  # fetch a price for valuation ratios
+    # Return an earlier memo instead of writing a new one, if the filings, the
+    # question, the options and the code are all unchanged. Free when it hits.
+    reuse: bool = False
 
     def estimate_usd(self) -> float:
         return ESTIMATE_PER_MEMO if (self.text or self.verify) else ESTIMATE_RATIOS_ONLY
@@ -83,8 +89,13 @@ class Worker:
         fetch_text=fetch_passages,
         fetch_news=fetch_news,
         quote=fetch_quote,
+        cache=None,
+        lookup_accession=latest_accession,
     ):
         self.store = store
+        self.cache = cache
+        self.lookup_accession = lookup_accession
+        self._code_version = None
         self.settings = settings
         self.analyst_factory = analyst_factory
         self.runs_dir = runs_dir
@@ -108,24 +119,61 @@ class Worker:
         return self._run(job) if job else self.store.get(job_id)
 
     def _run(self, job: Job) -> Job | None:
-        # A fresh analyst per job, so its spend counter is this job's alone.
-        analyst = self.analyst_factory()
+        # The analyst is built only when a job actually needs Claude, so a memo
+        # served from the cache never creates one. A fresh analyst per job keeps
+        # its spend counter this job's alone.
+        built = []
+
+        def analyst():
+            if not built:
+                built.append(self.analyst_factory())
+            return built[0]
+
         try:
             if job.kind == "memo":
                 self._memo(job, analyst)
             else:
-                self._batch(job, analyst)
+                self._batch(job, analyst())
         except Exception as failed:  # anything, so one bad job cannot stop the worker
             self.store.finish(
                 job.id,
                 "failed",
-                cost_usd=getattr(analyst, "spent_usd", 0.0),
+                cost_usd=getattr(built[0], "spent_usd", 0.0) if built else 0.0,
                 error=f"{type(failed).__name__}: {failed}",
             )
         return self.store.get(job.id)
 
-    def _memo(self, job: Job, analyst) -> None:
+    def _memo_key(self, request: MemoRequest) -> str | None:
+        """Where this memo would be cached, or None if the filings can't be identified."""
+        try:
+            accessions = [self.lookup_accession(request.ticker)]
+            if request.peer:
+                accessions.append(self.lookup_accession(request.peer))
+        except Exception:
+            return None  # can't pin the filings, so can't safely reuse
+        if self._code_version is None:
+            self._code_version = code_version()
+        options = request.model_dump(exclude={"reuse"})
+        # News and prices change daily, so a memo using them is only good for the day.
+        day = date.today().isoformat() if (request.news or request.market) else None
+        return memo_key(options, accessions, self._code_version, day)
+
+    def _memo(self, job: Job, make_analyst) -> None:
         request = MemoRequest(**job.request)
+        key = self._memo_key(request) if self.cache is not None else None
+
+        if request.reuse and key and (hit := self.cache.get(key)) is not None:
+            cached = json.loads(hit)
+            self.store.finish(
+                job.id,
+                "done",
+                cost_usd=0.0,
+                memo=cached["memo"],
+                result={**cached["result"], "reused_from": cached["job_id"]},
+            )
+            return
+
+        analyst = make_analyst()
         state = run_analysis(
             request.ticker,
             request.question,
@@ -139,19 +187,26 @@ class Worker:
             quote=self.quote if request.market else None,
             fetch_news=self.fetch_news if request.news else None,
         )
+        result = {
+            "metric_ids": state.metric_ids,
+            "drafts": len(state.drafts),
+            "claim_checks": [check.model_dump() for check in state.claim_checks],
+        }
         self.store.finish(
             job.id,
             "done" if state.memo else "failed",
             # The analyst's own counter includes calls whose replies were rejected.
             cost_usd=getattr(analyst, "spent_usd", state.cost_usd),
             memo=state.memo,
-            result={
-                "metric_ids": state.metric_ids,
-                "drafts": len(state.drafts),
-                "claim_checks": [check.model_dump() for check in state.claim_checks],
-            },
+            result=result,
             error=state.error,
         )
+        # Every published memo is kept, whether or not this request wanted reuse,
+        # so a later request that does can find it. A failed memo is never kept.
+        if key and state.memo:
+            self.cache.put(
+                key, json.dumps({"memo": state.memo, "result": result, "job_id": job.id}).encode()
+            )
 
     def _batch(self, job: Job, analyst) -> None:
         request = BatchRequest(**job.request)

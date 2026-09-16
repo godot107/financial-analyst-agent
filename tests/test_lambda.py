@@ -99,6 +99,7 @@ def cloud(monkeypatch):
                 "fetch_text": lambda ticker: [],
                 "fetch_news": lambda ticker: [],
                 "quote": None,
+                "lookup_accession": lambda ticker: f"acc-{ticker}",
             },
         )
         return handler, worker, s3, lam, analysts

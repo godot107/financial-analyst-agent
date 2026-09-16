@@ -12,11 +12,9 @@ Reach for embeddings only if this falls short.
 No LLM here: the writer receives passages, but nothing in this file calls a model.
 """
 
-import os
 import re
 from pathlib import Path
 
-from edgar import Company, set_identity
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from rank_bm25 import BM25Okapi
 
@@ -60,16 +58,18 @@ def split_passages(text: str, item: str, ticker: str, accession: str, start: int
     return passages
 
 
-def fetch_passages(ticker: str, identity: str | None = None) -> list[Passage]:
-    """MD&A and risk factors from the company's latest 10-K."""
-    identity = identity or os.environ.get("SEC_USER_AGENT")
-    if not identity:
-        raise RuntimeError("SEC_USER_AGENT is not set; the SEC requires a name and email")
-    set_identity(identity)
+def fetch_passages(
+    ticker: str, identity: str | None = None, cache=None, company=None
+) -> list[Passage]:
+    """MD&A and risk factors from the company's latest 10-K, cached by accession number."""
+    from fin_analyst.edgar import Company, latest_10k
 
-    filing = Company(ticker).get_filings(form="10-K").latest()
+    filing = latest_10k(ticker, identity, company or Company)
+    key = f"filings/{filing.accession_no}/passages.json"
+    if cache is not None and (hit := cache.get(key)) is not None:
+        return PassageList.validate_json(hit)
+
     report = filing.obj()
-
     passages: list[Passage] = []
     for item, text in (
         ("Item 7", report.management_discussion),
@@ -78,6 +78,8 @@ def fetch_passages(ticker: str, identity: str | None = None) -> list[Passage]:
         passages += split_passages(
             str(text or ""), item, ticker.upper(), filing.accession_no, start=len(passages) + 1
         )
+    if cache is not None and passages:
+        cache.put(key, PassageList.dump_json(passages))
     return passages
 
 

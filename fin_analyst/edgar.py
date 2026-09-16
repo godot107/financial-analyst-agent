@@ -196,8 +196,8 @@ def _fill_optional(facts: list[Fact], instants: pd.DataFrame, accession: str) ->
     return sorted(facts, key=lambda f: (f.line_item, -f.fiscal_year))
 
 
-def fetch_facts(ticker: str, identity: str | None = None) -> list[Fact]:
-    """Download the company's latest 10-K and pull our line items out of it."""
+def identify(identity: str | None = None) -> None:
+    """Every SEC request must carry a name and email (their fair-access rules)."""
     identity = identity or os.environ.get("SEC_USER_AGENT")
     if not identity:
         raise RuntimeError(
@@ -206,8 +206,33 @@ def fetch_facts(ticker: str, identity: str | None = None) -> list[Fact]:
         )
     set_identity(identity)
 
-    filing = Company(ticker).get_filings(form="10-K").latest()
-    return select_facts(filing.xbrl().facts.to_dataframe(), filing.accession_no)
+
+def latest_10k(ticker: str, identity: str | None = None, company=Company):
+    """The company's most recent 10-K. A cheap lookup: metadata, not the filing."""
+    identify(identity)
+    return company(ticker).get_filings(form="10-K").latest()
+
+
+def latest_accession(ticker: str, identity: str | None = None, company=Company) -> str:
+    return latest_10k(ticker, identity, company).accession_no
+
+
+def fetch_facts(ticker: str, identity: str | None = None, cache=None, company=Company) -> list[Fact]:
+    """Download the company's latest 10-K and pull our line items out of it.
+
+    With a cache, the filing's XBRL is downloaded once per accession number and
+    never again: a filing does not change after it is accepted. Which filing is
+    the latest is still looked up every time, so a new 10-K is never missed.
+    """
+    filing = latest_10k(ticker, identity, company)
+    key = f"filings/{filing.accession_no}/facts.json"
+    if cache is not None and (hit := cache.get(key)) is not None:
+        return FactList.validate_json(hit)
+
+    facts = select_facts(filing.xbrl().facts.to_dataframe(), filing.accession_no)
+    if cache is not None and facts:
+        cache.put(key, FactList.dump_json(facts))
+    return facts
 
 
 def save_facts(facts: list[Fact], path: Path) -> None:

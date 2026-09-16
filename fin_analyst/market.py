@@ -41,8 +41,17 @@ class MarketDataUnavailable(RuntimeError):
     """No price, so no valuation ratios. Everything else still works."""
 
 
-def fetch_quote(ticker: str, api_key: str | None = None, opener=urllib.request.urlopen) -> Quote:
-    """The latest daily close, from Alpha Vantage's free GLOBAL_QUOTE endpoint."""
+def fetch_quote(
+    ticker: str, api_key: str | None = None, opener=urllib.request.urlopen, cache=None
+) -> Quote:
+    """The latest daily close, from Alpha Vantage's free GLOBAL_QUOTE endpoint.
+
+    Cached per ticker per day: the free plan allows 25 requests a day, and a
+    price fetched this morning is the same price this afternoon.
+    """
+    key = f"prices/{ticker.upper()}/{date.today().isoformat()}.json"
+    if cache is not None and (hit := cache.get(key)) is not None:
+        return Quote.model_validate_json(hit)
     api_key = api_key or os.environ.get("ALPHAVANTAGE_KEY")
     if not api_key:
         raise MarketDataUnavailable(
@@ -66,12 +75,15 @@ def fetch_quote(ticker: str, api_key: str | None = None, opener=urllib.request.u
             f"no price for {ticker.upper()}: {reason or 'the response carried no quote'}"
         )
 
-    return Quote(
+    fetched = Quote(
         ticker=ticker.upper(),
         price=float(price),
         as_of=quote.get("07. latest trading day") or date.today().isoformat(),
         source="Alpha Vantage GLOBAL_QUOTE",
     )
+    if cache is not None:
+        cache.put(key, fetched.model_dump_json().encode())
+    return fetched
 
 
 def price_fact(quote: Quote, fiscal_year: int) -> Fact:

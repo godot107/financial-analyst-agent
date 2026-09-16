@@ -48,7 +48,22 @@ Resources:
         Rules:
           - Id: ExpireOldJobs
             Status: Enabled
+            Prefix: jobs/
             ExpirationInDays: !Ref JobRetentionDays
+          # Filings never change, but a year-old one is rarely the latest; if it
+          # is asked for again it is simply downloaded again.
+          - Id: ExpireCachedFilings
+            Status: Enabled
+            Prefix: cache/filings/
+            ExpirationInDays: 365
+          - Id: ExpireCachedMemos
+            Status: Enabled
+            Prefix: cache/memos/
+            ExpirationInDays: 90
+          - Id: ExpireCachedPrices
+            Status: Enabled
+            Prefix: cache/prices/
+            ExpirationInDays: 7
           - Id: AbortIncompleteUploads
             Status: Enabled
             AbortIncompleteMultipartUpload:

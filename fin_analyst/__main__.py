@@ -4,7 +4,11 @@ import argparse
 import os
 import sys
 
-from fin_analyst.config import load_settings
+from functools import partial
+
+from fin_analyst.cache import LocalCache, NoCache
+from fin_analyst.config import PROJECT_ROOT, load_settings
+from fin_analyst.edgar import fetch_facts
 from fin_analyst.graph import run_analysis
 from fin_analyst.market import fetch_quote
 from fin_analyst.news import fetch_news
@@ -42,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--market",
         action="store_true",
         help="fetch a share price so valuation ratios work (needs ALPHAVANTAGE_KEY)",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="fetch every filing fresh instead of reusing ones already downloaded",
     )
     parser.add_argument(
         "--no-verify",
@@ -94,18 +103,23 @@ def main(argv: list[str] | None = None) -> int:
     print("\nWorking...\n")
     analyst = ClaudeAnalyst(settings)
 
+    # Filings never change once filed, so they are kept in cache/ by accession
+    # number and downloaded once. The latest-filing lookup still runs every time.
+    cache = NoCache() if args.no_cache else LocalCache(PROJECT_ROOT / "cache")
+
     # None means "don't read the narrative at all"; the default reads Item 7 and 1A.
-    fetch_text = None if args.no_text else fetch_passages
+    fetch_text = None if args.no_text else partial(fetch_passages, cache=cache)
 
     if args.chat:
         return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text)
 
     state = run_analysis(
         ticker, args.question, analyst, settings, peer_ticker=args.peer,
+        fetch=partial(fetch_facts, cache=cache),
         fetch_text=fetch_text, verify=not args.no_verify,
-        quote=fetch_quote if args.market else None,
+        quote=partial(fetch_quote, cache=cache) if args.market else None,
         fetch_news=(
-            (lambda ticker: fetch_news(ticker, include_index=args.news_index))
+            (lambda ticker: fetch_news(ticker, include_index=args.news_index, cache=cache))
             if (args.news or args.news_index)
             else None
         ),
