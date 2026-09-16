@@ -96,9 +96,18 @@ class Worker:
     def process_next(self) -> Job | None:
         """Run the oldest queued job, if there is one, and record how it ended."""
         job = self.store.claim_next()
-        if job is None:
-            return None
+        return self._run(job) if job else None
 
+    def process(self, job_id: str) -> Job | None:
+        """Run one named job. Lambda's worker calls this with the id it was sent.
+
+        A job that isn't queued any more is left alone: an event delivered twice
+        must not run - and pay for - the same memo twice.
+        """
+        job = self.store.claim(job_id)
+        return self._run(job) if job else self.store.get(job_id)
+
+    def _run(self, job: Job) -> Job | None:
         # A fresh analyst per job, so its spend counter is this job's alone.
         analyst = self.analyst_factory()
         try:
@@ -178,8 +187,13 @@ def create_app(
     worker: Worker,
     run_worker: bool = False,
     fetch=fetch_facts,
+    dispatch: Callable[[str], None] | None = None,
 ) -> FastAPI:
-    """The web app. Tests pass run_worker=False and drive the worker by hand."""
+    """The web app. Tests pass run_worker=False and drive the worker by hand.
+
+    `dispatch` starts a job somewhere else - on Lambda, an asynchronous
+    invocation of the worker. Without it, the local worker thread finds the job.
+    """
     if not keys:
         raise ValueError("refusing to start without at least one API key")
 
@@ -235,13 +249,25 @@ def create_app(
         estimate = request.estimate_usd()
         admit(key_name, estimate)
         job = store.add("memo", key_name, request.model_dump(), estimate)
+        start(job)
         return Accepted(id=job.id, status_url=f"/v1/memos/{job.id}", estimate_usd=estimate)
+
+    def start(job: Job) -> None:
+        """Hand a job to the worker. If that fails, the job must not sit queued forever."""
+        if dispatch is None:
+            return
+        try:
+            dispatch(job.id)
+        except Exception as failed:
+            store.finish(job.id, "failed", cost_usd=0.0, error=f"could not start the job: {failed}")
+            raise HTTPException(status_code=503, detail="the job could not be started; nothing was spent")
 
     @app.post("/v1/batches", status_code=202, response_model=Accepted)
     def submit_batch(request: BatchRequest, key_name: str = Depends(caller)):
         estimate = request.estimate_usd()
         admit(key_name, estimate)
         job = store.add("batch", key_name, request.model_dump(), estimate)
+        start(job)
         return Accepted(id=job.id, status_url=f"/v1/memos/{job.id}", estimate_usd=estimate)
 
     @app.get("/v1/memos/{job_id}", response_model=Job)

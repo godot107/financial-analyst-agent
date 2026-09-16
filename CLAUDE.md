@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service, `fin_analyst/service.py`) is built — see `docs/API_PLAN.md`. 188 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is built but not deployed — see `docs/API_PLAN.md`. 197 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -71,3 +71,11 @@ Project-local `.venv`. Local only: no AWS or Bedrock.
 
 - `../congress-signal`: LLM-isolation test pattern, `SEC_USER_AGENT`
 - `../textbook-kb`: ratio definitions (Berk & DeMarzo Ch. 2); retrieval stack for Iteration 2
+
+## Deploying (Phase B)
+
+`deploy/00_iam.sh` runs as **admin** (Willie's `default` profile, signed in with `aws login`);
+everything after it runs as the restricted `fin-analyst` profile. Never use the `tictactoe` profile:
+its policy covers Lightsail only. Never print a secret: keys go into the CLI credentials file or SSM
+on stdin. `04_app.sh` without `--execute` only previews; ask before `--execute`, before
+`05_verify.sh --memo` (it spends), and before any teardown.

@@ -1,0 +1,17 @@
+name: cloudburn
+on:
+  push:
+    paths: ["infra/**", ".cloudburn.yml", ".github/workflows/cloudburn.yml"]
+  pull_request:
+    paths: ["infra/**", ".cloudburn.yml", ".github/workflows/cloudburn.yml"]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Cost-policy scan of the CloudFormation templates
+        run: npx --yes cloudburn@0.18.4 scan infra --config .cloudburn.yml

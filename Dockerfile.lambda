@@ -1,0 +1,17 @@
+# The service on AWS Lambda (iteration 3, Phase B). Same code as the local
+# Dockerfile; the base image supplies Lambda's runtime interface.
+FROM public.ecr.aws/lambda/python:3.12
+
+# Only /tmp is writable on Lambda: edgartools caches filings there.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    EDGAR_LOCAL_DATA_DIR=/tmp/edgar \
+    HOME=/tmp
+
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
+
+COPY config.yaml ${LAMBDA_TASK_ROOT}/
+COPY fin_analyst ${LAMBDA_TASK_ROOT}/fin_analyst
+
+# Secrets come from SSM Parameter Store at cold start, never from the image.
+CMD ["fin_analyst.lambda_handler.handler"]

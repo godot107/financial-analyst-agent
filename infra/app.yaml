@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  fin-analyst service: one container-image Lambda behind an IAM-authenticated
+  function URL, with jobs and memos in S3. Deployed by deploy/04_app.sh.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fin-analyst
+  ImageUri:
+    Type: String
+  BoundaryArn:
+    Type: String
+    Description: The permissions boundary from the <project>-iam stack.
+  MemorySize:
+    Type: Number
+    Default: 2048
+  TimeoutSeconds:
+    Type: Number
+    Default: 300 # a memo with retries; far above the ~30-90s typical
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+  JobRetentionDays:
+    Type: Number
+    Default: 90
+
+Resources:
+  JobsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub "${ProjectName}-jobs-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldJobs
+            Status: Enabled
+            ExpirationInDays: !Ref JobRetentionDays
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      Tags:
+        - Key: project
+          Value: !Ref ProjectName
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}"
+      RetentionInDays: !Ref LogRetentionDays
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-function"
+      PermissionsBoundary: !Ref BoundaryArn
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: run
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${LogGroup.Arn}:*"
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub "${JobsBucket.Arn}/*"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt JobsBucket.Arn
+              - Effect: Allow
+                Action: ssm:GetParametersByPath
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}"
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+              # To start its own worker. Named, not referenced: a reference to
+              # the function would make the role depend on it, and it on the role.
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}"
+
+  Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref ProjectName
+      Description: Financial analyst memos. Requests via the IAM function URL; jobs via asynchronous self-invocation.
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Architectures: [x86_64] # no arm64 emulation on the build machine
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref TimeoutSeconds
+      Role: !GetAtt FunctionRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref LogGroup
+      Environment:
+        Variables:
+          JOBS_BUCKET: !Ref JobsBucket
+          SSM_PREFIX: !Sub "/${ProjectName}"
+          EDGAR_LOCAL_DATA_DIR: /tmp/edgar # only /tmp is writable on Lambda
+          HOME: /tmp
+      Tags:
+        - Key: project
+          Value: !Ref ProjectName
+
+  # Asynchronous invocations retry twice by default. A retried memo is a second
+  # bill for the same work, so a failed job stays failed and says why.
+  WorkerRetries:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref Function
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+      MaximumEventAgeInSeconds: 3600
+
+  # AWS_IAM: every request must be signed with credentials of a principal in
+  # this account that is allowed to invoke it. Unsigned requests are refused by
+  # AWS before the function runs. No resource policy grants anyone else.
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt Function.Arn
+      AuthType: AWS_IAM
+
+Outputs:
+  FunctionUrl:
+    Value: !GetAtt FunctionUrl.FunctionUrl
+  FunctionName:
+    Value: !Ref Function
+  BucketName:
+    Value: !Ref JobsBucket

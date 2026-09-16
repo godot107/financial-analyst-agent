@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  fin-analyst bootstrap, deployed once with admin credentials by deploy/00_iam.sh:
+  the least-privilege deployer, the permissions boundary every role it creates
+  must carry, and a budget alarm that exists before anything billable does.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fin-analyst
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+  BudgetEmail:
+    Type: String
+    Description: Where the budget alarm is sent.
+  BudgetLimitUsd:
+    Type: Number
+    Default: 5
+    MinValue: 1
+
+Resources:
+  # The ceiling on what any role the deployer creates can ever do. Without it,
+  # a deployer allowed to create roles could create one with admin rights.
+  Boundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${ProjectName}-boundary"
+      Description: Maximum permissions for roles created by the fin-analyst deployer.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: JobsBucket
+            Effect: Allow
+            Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-*"
+              - !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-*/*"
+          - Sid: Secrets
+            Effect: Allow
+            Action: [ssm:GetParametersByPath, ssm:GetParameter]
+            Resource:
+              - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}"
+              - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/*"
+          - Sid: DecryptSecretsViaSsmOnly
+            Effect: Allow
+            Action: kms:Decrypt
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+          - Sid: StartOwnWorker
+            Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}*"
+          - Sid: Logs
+            Effect: Allow
+            Action: [logs:CreateLogStream, logs:PutLogEvents]
+            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}*:*"
+
+  DeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${ProjectName}-deploy"
+      Description: What the fin-analyst deployer may do, and nothing else.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Only the two stacks it owns, matched by exact name, so it can never
+          # reach this bootstrap stack (<project>-iam).
+          - Sid: OwnStacks
+            Effect: Allow
+            Action: cloudformation:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProjectName}-ecr/*"
+              - !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProjectName}-app/*"
+          - Sid: StackRead
+            Effect: Allow
+            Action: [cloudformation:ValidateTemplate, cloudformation:ListStacks, cloudformation:DescribeStacks, cloudformation:GetTemplateSummary]
+            Resource: "*"
+          - Sid: EcrLogin
+            Effect: Allow
+            Action: ecr:GetAuthorizationToken
+            Resource: "*"
+          - Sid: OwnRepository
+            Effect: Allow
+            Action: ecr:*
+            Resource: !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}*"
+          - Sid: OwnFunction
+            Effect: Allow
+            Action: lambda:*
+            Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}*"
+          - Sid: OwnBucket
+            Effect: Allow
+            Action: s3:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-*"
+              - !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-*/*"
+          - Sid: OwnLogGroup
+            Effect: Allow
+            Action: logs:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}*:*"
+          - Sid: LogRead
+            Effect: Allow
+            Action: logs:DescribeLogGroups
+            Resource: "*"
+          - Sid: OwnSecrets
+            Effect: Allow
+            Action: [ssm:PutParameter, ssm:GetParameter, ssm:GetParameters, ssm:GetParametersByPath, ssm:DeleteParameter, ssm:DeleteParameters, ssm:AddTagsToResource]
+            Resource:
+              - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}"
+              - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/*"
+          - Sid: SecretsKeyViaSsmOnly
+            Effect: Allow
+            Action: [kms:Encrypt, kms:Decrypt, kms:GenerateDataKey]
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+          # It may create and change roles only if they carry the boundary above.
+          - Sid: RolesOnlyWithBoundary
+            Effect: Allow
+            Action: [iam:CreateRole, iam:PutRolePolicy, iam:AttachRolePolicy, iam:DetachRolePolicy, iam:DeleteRolePolicy]
+            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*"
+            Condition:
+              StringEquals:
+                iam:PermissionsBoundary: !Ref Boundary
+          - Sid: RoleHousekeeping
+            Effect: Allow
+            Action: [iam:GetRole, iam:GetRolePolicy, iam:ListRolePolicies, iam:ListAttachedRolePolicies, iam:DeleteRole, iam:TagRole, iam:UntagRole]
+            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*"
+          - Sid: PassRoleToLambdaOnly
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*"
+            Condition:
+              StringEquals:
+                iam:PassedToService: lambda.amazonaws.com
+          - Sid: NeverRemoveTheBoundary
+            Effect: Deny
+            Action: [iam:DeleteRolePermissionsBoundary, iam:PutRolePermissionsBoundary]
+            Resource: "*"
+
+  Deployer:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "${ProjectName}-deployer"
+      ManagedPolicyArns: [!Ref DeployPolicy]
+      Tags:
+        - Key: project
+          Value: !Ref ProjectName
+
+  # Account-wide on purpose: it should catch anything unexpected, not only this
+  # project. It alerts; it does not stop spending.
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+
+Outputs:
+  UserName:
+    Value: !Ref Deployer
+  BoundaryArn:
+    Value: !Ref Boundary

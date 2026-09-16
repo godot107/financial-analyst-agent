@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: fin-analyst image repository. Deployed by deploy/02_ecr.sh as the deployer.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fin-analyst
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ProjectName
+      EmptyOnDelete: true # teardown should not need a separate image purge
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Drop untagged images after a day",
+                "selection": {"tagStatus": "untagged", "countType": "sinceImagePushed", "countUnit": "days", "countNumber": 1},
+                "action": {"type": "expire"}
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep the last five images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 5},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: project
+          Value: !Ref ProjectName
+
+Outputs:
+  RepositoryUri:
+    Value: !GetAtt Repository.RepositoryUri

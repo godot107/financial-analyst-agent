@@ -1,6 +1,7 @@
 # Plan: serving the analyst as an API
 
-Status: **Phase A complete** (local service, tested, containerised, verified end to end). Phases B and C planned. Iteration 3. The CLI and batch runner work today; this plans the
+Status: **Phase A complete. Phase B built, not yet deployed** (templates, scripts and Lambda image
+tested offline). Phase C planned. Iteration 3. The CLI and batch runner work today; this plans the
 same workflow behind an HTTP interface so other systems can ask for memos.
 
 ## What the service is, and is not
@@ -97,6 +98,43 @@ several seconds on Lambda. That is harmless here — submission and work are sep
 
 **Done when:** a signed request from another service in the account gets a memo back through the
 notify hook, and teardown removes everything.
+
+**As built:**
+
+```
+infra/iam.yaml   admin, once: deployer user, permissions boundary, budget alarm
+infra/ecr.yaml   image repository (lifecycle rules, scan on push, emptied on delete)
+infra/app.yaml   Lambda + IAM function URL + S3 jobs bucket + log group + role
+
+deploy/00_iam.sh      admin: bootstrap stack; deployer key written to a CLI profile, never printed
+deploy/01_secrets.sh  .env -> SSM SecureStrings, values on stdin, never on the command line
+deploy/02_ecr.sh      repository
+deploy/03_image.sh    build (linux/amd64, --provenance=false) and push, tagged with the commit
+deploy/04_app.sh      previews the change set; --execute applies it
+deploy/05_verify.sh   free: unsigned -> 403, signed without key -> 401, health, coverage
+                      --memo: one real memo (~$0.05)
+deploy/99_teardown.sh service, repository, secrets; --iam also the bootstrap (as admin)
+```
+
+Code: `fin_analyst/lambda_handler.py` (routes a function-URL request to the app through Mangum, and
+a `{"job_id"}` event to the worker) and `S3JobStore` beside the SQLite one. 9 more tests with fake
+AWS clients. The image was invoked locally through Lambda's runtime emulator: a job event reached the
+worker, a function-URL request reached the app and was refused `401` without a key, cold start
+6.2 s, warm 15 ms.
+
+Decisions worth knowing:
+
+- **The deployer cannot escalate.** It may create roles only if they carry the `fin-analyst-boundary`
+  policy, may never remove a boundary, and may pass roles only to Lambda. Its CloudFormation grant
+  matches only `fin-analyst-ecr` and `fin-analyst-app`, so it cannot touch the bootstrap stack.
+  `00_iam.sh` checks both after creating it.
+- **Retries are off for the worker.** Lambda retries asynchronous invocations twice by default, and a
+  retried memo is a second bill. A failed job stays failed and says why. Delivery is still
+  at-least-once, so a job is claimed only while `queued`: an event delivered twice runs once.
+- **x86_64, not arm64.** The build machine has no arm64 emulation. CloudBurn flags it; the compute
+  difference is negligible next to the model cost, so it is accepted in `.cloudburn.yml`.
+- **The budget alarm is account-wide** and created before anything billable. It alerts; it does not
+  stop spending. The service's own caps are what stop it.
 
 ### Phase C — public endpoint (optional, and last)
 

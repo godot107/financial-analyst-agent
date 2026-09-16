@@ -15,3 +15,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ipynb_checkpoints/
+
+# Deploy settings and the last pushed image tag (local)
+deploy/config.env
+deploy/.image

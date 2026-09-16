@@ -1,0 +1,12 @@
+# Cost-policy scan of infra/ (CloudFormation), offline, no AWS credentials.
+#   cloudburn scan infra --config .cloudburn.yml
+iac:
+  format: table
+  fail-on: high
+
+# Accepted, with reasons:
+#  CLDBRN-AWS-LAMBDA-1 (arm64): the build machine has no arm64 emulation, so the
+#    image is x86_64. Claude's cost per memo dwarfs the compute difference.
+#  CLDBRN-AWS-S3-2 (storage classes): job files are a few KB and expire after 90
+#    days. Transition requests and minimum-size charges would cost more than
+#    colder storage saves.
