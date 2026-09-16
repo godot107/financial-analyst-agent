@@ -87,7 +87,14 @@ def test_descriptions_cover_every_metric():
 def facts(**line_items) -> list[Fact]:
     """Facts for one year, e.g. facts(equity=-5, net_income=10)."""
     return [
-        Fact(name, 2026, float(value), "us-gaap:Test", "2026-06-30", "acc")
+        Fact(
+            line_item=name,
+            fiscal_year=2026,
+            value=float(value),
+            concept="us-gaap:Test",
+            period="2026-06-30",
+            accession="acc",
+        )
         for name, value in line_items.items()
     ]
 
@@ -117,7 +124,15 @@ def test_negative_equity_gives_no_value():
 
 def test_a_company_with_no_debt_lines_is_not_treated_as_debt_free():
     unreported = [
-        Fact(name, 2026, 0.0, "", "2026-06-30", "acc", reported=False)
+        Fact(
+            line_item=name,
+            fiscal_year=2026,
+            value=0.0,
+            concept="",
+            period="2026-06-30",
+            accession="acc",
+            reported=False,
+        )
         for name in ("short_term_borrowings", "current_long_term_debt", "long_term_debt")
     ]
     results = compute_all(facts(equity=1_000) + unreported, ["debt_to_equity"])
@@ -127,7 +142,14 @@ def test_a_company_with_no_debt_lines_is_not_treated_as_debt_free():
 
 def test_zero_debt_lines_that_are_reported_do_compute():
     reported_zero = [
-        Fact(name, 2026, 0.0, "us-gaap:Test", "2026-06-30", "acc")
+        Fact(
+            line_item=name,
+            fiscal_year=2026,
+            value=0.0,
+            concept="us-gaap:Test",
+            period="2026-06-30",
+            accession="acc",
+        )
         for name in ("short_term_borrowings", "current_long_term_debt", "long_term_debt")
     ]
     results = compute_all(facts(equity=1_000) + reported_zero, ["debt_to_equity"])

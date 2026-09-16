@@ -8,22 +8,30 @@ Definitions follow Berk & DeMarzo, *Corporate Finance* Ch. 2 and Subramanyam,
 averages (B&D eq. 2.20 does the same; its footnote allows averages instead).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from fin_analyst.edgar import Fact
 
 Values = dict[str, Fact]
 
 
-@dataclass(frozen=True)
-class MetricResult:
+class MetricResult(BaseModel):
+    """One ratio for one year, or the reason there isn't one.
+
+    Pydantic, like Fact: this is what the compute node puts into the graph state.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
     metric_id: str
     fiscal_year: int
     value: float | None
     unit: str  # "ratio" (1.35x) or "percent" (36.1%)
     reason: str | None = None  # why there is no value
-    inputs: dict[str, float] = field(default_factory=dict)
+    inputs: dict[str, float] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -152,10 +160,10 @@ def compute(metric: Metric, year: int, values: Values) -> MetricResult:
     missing = [name for name in metric.inputs if name not in values]
     if missing:
         return MetricResult(
-            metric.id,
-            year,
-            None,
-            metric.unit,
+            metric_id=metric.id,
+            fiscal_year=year,
+            value=None,
+            unit=metric.unit,
             reason=f"the filing has no {', '.join(missing)} for {year}",
         )
 
@@ -163,25 +171,39 @@ def compute(metric: Metric, year: int, values: Values) -> MetricResult:
         values[name].reported for name in metric.needs_any_reported
     ):
         return MetricResult(
-            metric.id, year, None, metric.unit, reason=f"the filing reports no debt lines for {year}"
+            metric_id=metric.id,
+            fiscal_year=year,
+            value=None,
+            unit=metric.unit,
+            reason=f"the filing reports no debt lines for {year}",
         )
 
     numbers = {name: values[name].value for name in metric.inputs}
     denominator = numbers[metric.denominator]
     if denominator == 0:
         return MetricResult(
-            metric.id, year, None, metric.unit, reason=f"{metric.denominator} is zero for {year}"
+            metric_id=metric.id,
+            fiscal_year=year,
+            value=None,
+            unit=metric.unit,
+            reason=f"{metric.denominator} is zero for {year}",
         )
     if metric.denominator_must_be_positive and denominator < 0:
         return MetricResult(
-            metric.id,
-            year,
-            None,
-            metric.unit,
+            metric_id=metric.id,
+            fiscal_year=year,
+            value=None,
+            unit=metric.unit,
             reason=f"{metric.denominator} is negative for {year}, which makes this ratio misleading",
         )
 
-    return MetricResult(metric.id, year, metric.formula(numbers), metric.unit, inputs=numbers)
+    return MetricResult(
+        metric_id=metric.id,
+        fiscal_year=year,
+        value=metric.formula(numbers),
+        unit=metric.unit,
+        inputs=numbers,
+    )
 
 
 def compute_all(facts: list[Fact], metric_ids: list[str] | None = None) -> list[MetricResult]:

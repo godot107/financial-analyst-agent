@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1, Steps 0–2 done (39 tests). Step 3 (placeholders and checks) is next. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1, Steps 0–3 done (57 tests). Step 4 (the LangGraph workflow with a fake Claude) is next. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -36,6 +36,8 @@ Project-local `.venv`. Local only: no AWS or Bedrock.
   income and equity. Quick ratio = (cash + short-term investments + receivables) / current
   liabilities. Debt = the sum of the debt lines, never total liabilities.
 - **Every run saves a JSON run record in `runs/`**, even when no memo is produced.
+- **Values that move between nodes are Pydantic models** (`Fact`, `MetricResult`, the graph state,
+  and Claude's plan), so a bad value fails at the node that made it.
 - **Tests never hit the network or the API.** Use fixtures in `tests/fixtures/` and a fake client.
 - **Ask Willie before any live Claude run**, and state the estimated cost. The budget guard
   (`max_usd_per_run` in `config.yaml`) stays on.

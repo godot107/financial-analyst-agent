@@ -4,17 +4,24 @@ No LLM here, and no ratios either. This module only finds numbers in the filing
 and records where each one came from.
 """
 
-from dataclasses import dataclass, asdict
-import json
 import os
 from pathlib import Path
 
 import pandas as pd
 from edgar import Company, set_identity
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 
-@dataclass(frozen=True)
-class Fact:
+class Fact(BaseModel):
+    """One number from a filing, with where it came from.
+
+    Pydantic rather than a plain dataclass: these values travel through the
+    LangGraph state, and validation there catches a malformed value at the node
+    that produced it instead of three nodes later.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
     line_item: str  # our name, e.g. "current_assets"
     fiscal_year: int
     value: float
@@ -22,6 +29,9 @@ class Fact:
     period: str  # balance sheet date, or the last day of the income statement year
     accession: str  # the filing it came from
     reported: bool = True  # False = not on the statement, treated as 0
+
+
+FactList = TypeAdapter(list[Fact])
 
 
 # Candidate XBRL tags per line item, best first. Companies tag the same idea
@@ -176,8 +186,8 @@ def fetch_facts(ticker: str, identity: str | None = None) -> list[Fact]:
 
 
 def save_facts(facts: list[Fact], path: Path) -> None:
-    path.write_text(json.dumps([asdict(f) for f in facts], indent=2) + "\n")
+    path.write_bytes(FactList.dump_json(facts, indent=2) + b"\n")
 
 
 def load_facts(path: Path) -> list[Fact]:
-    return [Fact(**row) for row in json.loads(path.read_text())]
+    return FactList.validate_json(path.read_bytes())

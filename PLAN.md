@@ -77,21 +77,27 @@ agency for reliability. The README should say so plainly.
 
 ### State
 
+**Everything that moves between nodes is a Pydantic model**, and LangGraph takes a `BaseModel`
+as its state schema. Validation then fails at the node that produced a bad value instead of three
+nodes later, and `Fact` / `MetricResult` serialise straight into the fixtures and the run record.
+
 ```python
-class AnalysisState(TypedDict, total=False):
+class AnalysisState(BaseModel):
     ticker: str
     question: str
-    metric_ids: list[str]          # plan
-    facts: list[Fact]              # fetch
-    metrics: list[MetricResult]    # compute
-    drafts: list[str]              # write: every attempt, latest last (placeholders, not numbers)
-    problems: list[str]            # check: problems in the latest draft (empty = passed)
-    memo: str                      # render
-    cost_usd: float                # running total; the budget guard reads it
+    metric_ids: list[str] = []          # plan
+    facts: list[Fact] = []              # fetch
+    metrics: list[MetricResult] = []    # compute
+    drafts: list[str] = []              # write: every attempt, latest last (placeholders, no numbers)
+    problems: list[str] = []            # check: problems in the latest draft (empty = passed)
+    memo: str | None = None             # render
+    cost_usd: float = 0.0               # running total; the budget guard reads it
 ```
 
-`Fact` = line item, fiscal year, value, XBRL concept tag, accession number.
-`MetricResult` = metric id, fiscal year, value (or `None`), reason if `None`, inputs used.
+`Fact` (in `edgar.py`) = line item, fiscal year, value, XBRL concept tag, period, accession
+number, reported flag. `MetricResult` (in `metrics.py`) = metric id, fiscal year, value (or
+`None`), unit, reason if `None`, inputs used. Claude's plan comes back as a Pydantic model too
+(`PlanChoice` in Step 5), so an invalid metric id is rejected before it reaches the graph.
 
 ### Run record
 
@@ -211,7 +217,7 @@ debt lines at all gives "no debt lines", which is different from reported zeros.
   `debt_to_equity`, with the reason "equity is not positive". Heavy buybacks can do this, and the
   ratios would mislead.
 
-### Step 3 — Placeholders and checks (`memo.py`)
+### Step 3 — Placeholders and checks (`memo.py`) ✅
 - `find_problems(draft, metrics, years) -> list[str]` covers leaked digits and unknown metric ids
   or years.
 - `render(draft, metrics) -> str` formats values: ratios as `1.35x`, margins as `36.1%`, changes
@@ -222,6 +228,11 @@ debt lines at all gives "no debt lines", which is different from reported zeros.
 
 **Done when:** tests cover a clean draft, a leaked number, a leaked percentage, an unknown
 placeholder, an allowed year, the rendered direction words, a `None` metric, and the footer.
+
+**As built:** the leak check strips placeholders, form names and the fiscal years present in the
+data, then reports every remaining digit. A year *not* in the data still counts as a leak, so
+figures remembered from other years can't be smuggled in. Every problem is reported at once, since
+the writer sees them all on its retry.
 
 ### Step 4 — The graph, with a fake Claude (`graph.py`)
 - Wire the six nodes. The Claude-using nodes get their model client passed in, so tests can pass
@@ -234,12 +245,69 @@ placeholder, an allowed year, the rendered direction words, a `None` metric, and
   - `plan` choosing an unknown metric → error
 
 ### Step 5 — Real Claude (`llm.py`)
-- `plan`: one call with a strict tool whose `metric_ids` is an enum of the metric list.
-- `write`: one call returning the draft text. The system prompt covers the placeholder rule, the
-  available placeholders, and the word rules in §2. On retry, the prompt includes the problems
-  found.
-- Model `claude-opus-5`, adaptive thinking, and refusal fallbacks. Check `stop_reason` before
-  reading.
+
+**Parameters** (from `config.yaml`; note Opus 5 rejects `temperature` and `top_p`, so effort and
+the prompt are the only dials):
+
+| | `plan` | `write` |
+|---|---|---|
+| model | claude-opus-5 | claude-opus-5 |
+| effort | low | medium |
+| max_tokens | 512 | 1500 |
+| output | strict tool, ids as an enum | markdown text |
+| other | — | adaptive thinking, refusal fallbacks |
+
+- `plan`: one call with a strict tool whose schema comes from the `PlanChoice` Pydantic model, so
+  `metric_ids` is an enum of the registry and Claude's answer is validated on arrival.
+- `write`: one call returning the draft. On retry, send a new user message listing the problems;
+  keep history append-only and echo `response.content` back unchanged.
+- Check `stop_reason` before reading content. A `max_tokens` stop counts as a problem and retries
+  with an instruction to be shorter; a refusal aborts the run with that reason in the record.
+
+**Planner system prompt:**
+
+```
+You choose which financial ratios answer a question about one company.
+You never compute, estimate or state a number.
+
+Choose 2 to 5 metric ids from this list, and nothing else:
+<metric list with one-line descriptions>
+
+- Choose what answers the question asked, not everything related to it.
+- For a question about return on equity, include its three DuPont components.
+- Return the choice with the choose_metrics tool.
+```
+
+**Writer system prompt:**
+
+```
+You write a short memo about <COMPANY> using only its latest 10-K.
+A Python program supplies every number. You never type one.
+
+Refer to numbers only with placeholders:
+  {{metric_id:year}}          e.g. {{current_ratio:2026}}
+  {{metric_id:year->year}}    e.g. {{net_margin:2025->2026}}
+                              renders as "rose 1.2 pts to 36.1%", direction included
+Only the placeholders listed below exist. Anything else is an error.
+
+Rules:
+- No digits outside a placeholder: no percentages, no multiples, no "above 1 is healthy".
+  You may name a fiscal year in prose when it appears in the data.
+- The values below are for your judgment only. Never repeat one as text.
+- Compare the company with its own prior year, and state plainly that there is no
+  peer comparison.
+- Explain only what the metrics show, such as which DuPont component moved, or
+  whether liquidity sits in cash or receivables. Give no business reasons: you do
+  not have the filing's text, so any reason would be invented.
+- If a metric is unavailable, say so and give the reason. Never work around it.
+- If the question needs something this data cannot give - a peer comparison, a
+  valuation multiple, or a business explanation - say so in one line.
+- About 250 words of markdown, opening with a one-line answer to the question.
+```
+
+**The writer does see the computed values.** It has to, in order to judge what is worth saying.
+That is safe because placeholders and the leak check decide what actually reaches the page, which
+is why "never repeat one as text" is stated outright.
 - Each node reads its model, `effort` and `max_tokens` from `config.yaml`. Output tokens cost 5x
   input and drive latency, so the ceilings are the main cost lever (Huyen Ch. 4); the 250-word
   rule is the other half of it.
@@ -264,10 +332,27 @@ Ask Willie before these live runs, with the estimated cost.
   - Record the result, either way.
 
   Editing numbers alone would pass trivially, because placeholders already guarantee them.
-- **Plan check:** write 8–10 questions, each with the metrics that should answer it (e.g.
-  "How liquid is it?" → current, quick, cash flow ratio). Run only the `plan` node on each and
-  report how many plans were valid. This catches "goal failure", a valid plan that doesn't answer
-  the question, which the unknown-metric test doesn't (Huyen Ch. 6).
+- **Plan check:** run only the `plan` node on each question below and report how many plans were
+  valid. This catches "goal failure", a valid plan that doesn't answer the question, which the
+  unknown-metric test doesn't (Huyen Ch. 6).
+
+  | Question | Should choose |
+  |---|---|
+  | How liquid is it? | current_ratio, quick_ratio, cash_flow_ratio |
+  | Can it cover its short-term obligations from operations? | cash_flow_ratio, current_ratio |
+  | What drives its return on equity? | roe + the three DuPont components |
+  | Is ROE coming from profitability or from leverage? | roe, net_margin, equity_multiplier |
+  | How much leverage does it carry? | debt_to_equity, equity_multiplier |
+  | Did margins expand or contract? | gross_margin, net_margin |
+  | How efficiently does it use its assets? | asset_turnover |
+  | Is it more or less profitable than last year? | net_margin, gross_margin, roe |
+  | How risky is the balance sheet? | debt_to_equity, current_ratio, quick_ratio |
+  | Give me a general financial health check. | a spread across liquidity, leverage, profitability |
+
+  **Questions it must decline, not answer:** "Should I buy the stock?" (not advice), "What's the
+  P/E?" (no market data in Iteration 1), "What did management say about AI?" (no filing text),
+  "How does it compare with Alphabet?" (one company). Each should produce a memo that says which
+  part can't be answered and why.
 - **Second company:** run one to see what breaks in the tag mapping, and fix or document it.
 - **README:**
   - how it works: a reliability-first chain, not an autonomous agent (§3)
@@ -319,6 +404,29 @@ Pick from these based on what Iteration 1 taught:
   - Every claim carries a source link and publication date.
   - The memo shows news in its own section, labelled with its dates, so it isn't mixed up with the
     10-K's fiscal period.
+- **Market data via Alpha Vantage**, as a `market` node beside `fetch`. It unlocks the valuation
+  ratios Iteration 1 has none of: P/E, EV/EBITDA, market-to-book (B&D §2.6). Rules:
+  - **Filings stay the source for anything on a financial statement.** Alpha Vantage's
+    fundamentals are normalized and carry no accession number, which breaks the audit trail; their
+    normalization can also differ from what was filed. Take price and market cap from them, and
+    nothing else. A second, weaker use is cross-checking our extraction against theirs.
+  - **Call the REST API from Python, not the MCP server.** Their official MCP server
+    (`mcp.alphavantage.co`) is for interactive research in Claude Code, like the EDGAR MCP server
+    in `congress-signal`. Inside the pipeline a model-driven tool call would hand back the agency
+    this design removes and make runs non-reproducible.
+  - Market data changes daily, so every market fact carries an "as of" timestamp and the memo
+    shows it. Free key: 25 requests a day, some endpoints premium (paid from $49.99/month),
+    checked 2026-09-15.
+- **Where the knowledge base lives, by content type:**
+  - **Numbers: a table, never a vector store.** Tabular retrieval is query-then-generate, a
+    different workflow from classic RAG (Huyen Ch. 6). Ours is simpler still, since the metric
+    registry already knows which line items it wants. Move from JSON per filing to SQLite keyed by
+    (concept, period, accession) when several filings arrive; that key also gives restatement
+    history. Storing raw XBRL/XML buys nothing the accession number doesn't.
+  - **Prose: BM25 first, embeddings second.** MD&A and risk factors are where you can't guess the
+    keyword. Term-based retrieval "works well out of the box" and is cheap, while vector database
+    spend can run to "one-fifth or even half" of model API spend (Huyen Ch. 6), so add embeddings
+    only when BM25 falls short, reusing textbook-kb's stack.
 - A per-run trace file and more evals (a hand-checked gold set, claim grading)
 - Averages instead of ending balances; interest coverage and other solvency metrics
 - Banks and insurers (current ratio doesn't apply)
