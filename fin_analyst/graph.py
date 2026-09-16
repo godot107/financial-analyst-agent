@@ -55,7 +55,11 @@ class Analyst(Protocol):
         """A memo draft written in placeholders, and what the call cost."""
 
 
-class BudgetExceeded(RuntimeError):
+class AnalysisFailed(RuntimeError):
+    """A run stopped for a reason worth recording rather than crashing on."""
+
+
+class BudgetExceeded(AnalysisFailed):
     """A run spent more than config.yaml allows. Something is wrong; stop."""
 
 
@@ -156,7 +160,7 @@ def run_analysis(
 
     try:
         state = AnalysisState.model_validate(graph.invoke(state))
-    except BudgetExceeded as stopped:
+    except AnalysisFailed as stopped:
         state = state.model_copy(update={"error": str(stopped)})
 
     save_run(state, runs_dir)

@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1, Steps 0–4 done (64 tests). Step 5 (real Claude in `llm.py`) is next — it needs an API key and Willie's approval before the first live run. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1, Steps 0–5 written (81 tests). The first live run is still pending: it needs a working `ANTHROPIC_API_KEY` and Willie's approval. Then Step 6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run

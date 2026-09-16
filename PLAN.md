@@ -250,7 +250,7 @@ methods (`choose_metrics`, `write_draft`), each returning its cost, so `llm.py` 
 Step 5 and the tests script it. The record leaves `facts` out — they are bulky, and the accession
 number in the footer is what a reader needs.
 
-### Step 5 — Real Claude (`llm.py`)
+### Step 5 — Real Claude (`llm.py`) ✅ (code; first live run still pending)
 
 **Parameters** (from `config.yaml`; note Opus 5 rejects `temperature` and `top_p`, so effort and
 the prompt are the only dials):
@@ -324,6 +324,10 @@ is why "never repeat one as text" is stated outright.
   many calls (Huyen Ch. 9); these prompts are short and may fall below the minimum cacheable
   size. Revisit when filing text enters the prompt in Iteration 2.
 - **Before the first live run:** ask Willie, stating the estimated cost.
+
+**As built:** `llm.py` is written and covered by 15 tests that use a fake client, so no test reaches
+the network. API failures (auth, rate limit, 5xx, connection) become recorded run failures rather
+than stack traces. `--dry-run` prints the settings and spends nothing.
 
 **Done when:** one live MSFT memo is saved in `runs/`, and the real cost is written in the README.
 

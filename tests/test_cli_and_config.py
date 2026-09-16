@@ -41,11 +41,21 @@ def test_help_runs():
     assert "ticker" in result.stdout
 
 
-def test_cli_echoes_request(capsys):
-    assert main(["msft", "How liquid is Microsoft?"]) == 0
+def test_dry_run_reports_settings_and_spends_nothing(capsys):
+    """--dry-run must never reach Claude, so it is safe in tests."""
+    assert main(["msft", "How liquid is Microsoft?", "--dry-run"]) == 0
     output = capsys.readouterr().out
     assert "MSFT" in output
     assert "How liquid is Microsoft?" in output
+    assert "nothing was spent" in output
+
+
+def test_a_live_run_without_an_api_key_stops_before_calling_anything(capsys, monkeypatch):
+    """No key means no call. .env is neutralised too, so this can't reach the API."""
+    monkeypatch.setattr("fin_analyst.config.load_dotenv", lambda *a, **k: None)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert main(["msft", "How liquid is Microsoft?"]) == 1
+    assert "No ANTHROPIC_API_KEY" in capsys.readouterr().err
 
 
 def test_project_config_loads():
