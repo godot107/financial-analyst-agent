@@ -225,3 +225,8 @@ test:
 Definitions follow Berk & DeMarzo, *Corporate Finance* Ch. 2 and Subramanyam, *Financial Statement
 Analysis*; the evaluation design follows Huyen, *AI Engineering*. Filing text in the test fixtures
 comes from public SEC EDGAR filings.
+
+## Authorship
+
+Built with [Claude Code](https://claude.com/claude-code). The design decisions, the review and the
+evaluation are mine; most of the code was model-written. MIT licensed.
