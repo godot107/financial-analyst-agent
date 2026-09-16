@@ -62,6 +62,11 @@ def _debt(v: dict[str, float]) -> float:
     return v["short_term_borrowings"] + v["current_long_term_debt"] + v["long_term_debt"]
 
 
+def _market_cap(v: dict[str, float]) -> float:
+    """The filing's diluted share count at the market's price."""
+    return v["share_price"] * v["diluted_shares"]
+
+
 METRICS: tuple[Metric, ...] = (
     Metric(
         id="current_ratio",
@@ -141,9 +146,45 @@ METRICS: tuple[Metric, ...] = (
         formula=lambda v: v["net_income"] / v["equity"],
         denominator_must_be_positive=True,
     ),
+    Metric(
+        id="pe_ratio",
+        description="market value of the company over its net income: what the market pays for a dollar of earnings (price is current, earnings are the fiscal year's)",
+        unit="ratio",
+        inputs=("share_price", "diluted_shares", "net_income"),
+        denominator="net_income",
+        formula=lambda v: _market_cap(v) / v["net_income"],
+        denominator_must_be_positive=True,
+    ),
+    Metric(
+        id="market_to_book",
+        description="market value of the company over its book equity: how far the market values it above its accounts",
+        unit="ratio",
+        inputs=("share_price", "diluted_shares", "equity"),
+        denominator="equity",
+        formula=lambda v: _market_cap(v) / v["equity"],
+        denominator_must_be_positive=True,
+    ),
+    Metric(
+        id="ev_to_revenue",
+        description="enterprise value (market value plus debt, less cash) over revenue: the whole firm's price per dollar of sales",
+        unit="ratio",
+        inputs=(
+            "share_price",
+            "diluted_shares",
+            "short_term_borrowings",
+            "current_long_term_debt",
+            "long_term_debt",
+            "cash",
+            "revenue",
+        ),
+        denominator="revenue",
+        formula=lambda v: (_market_cap(v) + _debt(v) - v["cash"]) / v["revenue"],
+    ),
 )
 
 METRICS_BY_ID = {m.id: m for m in METRICS}
+# Ratios that need a share price, which no filing contains.
+MARKET_METRIC_IDS = {m.id for m in METRICS if "share_price" in m.inputs}
 
 
 def describe_metrics() -> str:

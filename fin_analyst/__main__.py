@@ -6,6 +6,7 @@ import sys
 
 from fin_analyst.config import load_settings
 from fin_analyst.graph import run_analysis
+from fin_analyst.market import fetch_quote
 from fin_analyst.passages import fetch_passages
 
 
@@ -25,6 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-text",
         action="store_true",
         help="skip the filing's narrative: faster and cheaper, but the memo cannot say why",
+    )
+    parser.add_argument(
+        "--market",
+        action="store_true",
+        help="fetch a share price so valuation ratios work (needs ALPHAVANTAGE_KEY)",
     )
     parser.add_argument(
         "--no-verify",
@@ -86,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     state = run_analysis(
         ticker, args.question, analyst, settings, peer_ticker=args.peer,
         fetch_text=fetch_text, verify=not args.no_verify,
+        quote=fetch_quote if args.market else None,
     )
     show(state, analyst)
     return 0 if state.memo else 1

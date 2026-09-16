@@ -47,6 +47,23 @@ python -m fin_analyst MSFT "How liquid is Microsoft, and what drives its return 
 About $0.03–0.09 and half a minute. The memo prints, and a copy plus a full run record lands in
 `runs/`.
 
+## Optional: valuation ratios
+
+P/E, market-to-book and EV/revenue need a share price, which no filing contains. A free key from
+[alphavantage.co](https://www.alphavantage.co/support/#api-key) (25 requests a day) enables them:
+
+```
+ALPHAVANTAGE_KEY=...
+```
+
+```bash
+python -m fin_analyst MSFT "Is it expensive relative to its earnings?" --market
+```
+
+The price comes from Alpha Vantage; the share count comes from the filing. Their fundamentals are
+deliberately unused — no accession number, so a figure from them could not be traced to a filing.
+Without the key the memo still works; the valuation ratios report themselves unavailable.
+
 ## Everything else
 
 ```bash

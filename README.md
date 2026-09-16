@@ -189,7 +189,10 @@ and token ceilings are set per node in `config.yaml`.
 
 - **One filing per company.** Peer comparison is one company against one other, at year ends that
   usually differ; there is no common-period restatement.
-- **No market data,** so no P/E, EV/EBITDA or market-to-book.
+- **Market data is one price.** With `--market` and a free Alpha Vantage key you get P/E,
+  market-to-book and EV/revenue, computed from the filing's diluted share count and a current
+  price. That mixes a price from today with a fiscal year's figures, which the footer says
+  explicitly. Alpha Vantage's *fundamentals* are deliberately unused: no accession number.
 - **Banks:** liquidity ratios are correctly unavailable (no current assets), but debt to equity is
   computed from tags that miss most bank borrowing, so it understates leverage. Don't trust it.
 - **Retailers that don't tag gross profit** (Costco) get no gross margin rather than a derived one.

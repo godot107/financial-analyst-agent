@@ -331,3 +331,46 @@ def test_the_record_keeps_every_verdict_not_just_the_failures(settings, facts, t
 
     record = json.loads(sorted(tmp_path.glob("*.json"))[0].read_text())
     assert record["claim_checks"][0]["supported"] is True
+
+
+# --- the share price ------------------------------------------------------
+
+
+def fake_quote(ticker):
+    from fin_analyst.market import Quote
+
+    fake_quote.calls.append(ticker)
+    return Quote(ticker=ticker, price=500.0, as_of="2026-09-15", source="Alpha Vantage test")
+
+
+def test_a_price_is_fetched_only_when_a_valuation_ratio_was_chosen(settings, facts, tmp_path):
+    """No filing holds a price, and the call needs its own key, so it happens
+    only when something actually needs it."""
+    fake_quote.calls = []
+    analyst = FakeAnalyst([CLEAN_DRAFT], metric_ids=["current_ratio"])
+    run(analyst, settings, facts, tmp_path, quote=fake_quote)
+    assert fake_quote.calls == []
+
+    fake_quote.calls = []
+    draft = "It trades at {{pe_ratio:2026}}."
+    analyst = FakeAnalyst([draft], metric_ids=["pe_ratio"])
+    state = run(analyst, settings, facts, tmp_path, quote=fake_quote)
+
+    assert fake_quote.calls == ["MSFT"]
+    assert "x" in state.memo  # the ratio rendered
+    assert "Alpha Vantage test, 2026-09-15" in state.memo  # the footer dates the price
+
+
+def test_a_missing_price_costs_the_valuation_ratios_and_nothing_else(settings, facts, tmp_path):
+    from fin_analyst.market import MarketDataUnavailable
+
+    def no_quote(ticker):
+        raise MarketDataUnavailable("ALPHAVANTAGE_KEY is not set")
+
+    draft = "Liquidity eased: the current ratio {{current_ratio:2025->2026}}."
+    analyst = FakeAnalyst([draft], metric_ids=["pe_ratio", "current_ratio"])
+    state = run(analyst, settings, facts, tmp_path, quote=no_quote)
+
+    assert state.memo, "the rest of the memo should be unaffected"
+    pe = next(m for m in state.metrics if m.metric_id == "pe_ratio")
+    assert pe.value is None and "share_price" in pe.reason

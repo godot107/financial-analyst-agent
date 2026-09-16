@@ -22,7 +22,8 @@ from pydantic import BaseModel, Field
 from fin_analyst.config import Settings
 from fin_analyst.edgar import Fact, fetch_facts
 from fin_analyst.memo import build_footer, cited_claims, find_problems, render
-from fin_analyst.metrics import METRICS_BY_ID, MetricResult, compute_all
+from fin_analyst.market import MarketDataUnavailable, fetch_quote, price_fact
+from fin_analyst.metrics import MARKET_METRIC_IDS, METRICS_BY_ID, MetricResult, compute_all
 from fin_analyst.passages import Passage, fetch_passages, search
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
@@ -104,6 +105,7 @@ def build_graph(
     fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
     passages_k: int = 4,
     verify: bool = True,
+    quote: Callable[[str], object] | None = None,
 ):
     """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
 
@@ -126,6 +128,17 @@ def build_graph(
         facts = fetch(state.ticker)
         if not facts:
             raise ValueError(f"no facts found in the latest 10-K for {state.ticker}")
+
+        # A share price, but only when a valuation ratio was actually asked for:
+        # no filing contains one, and the call needs its own key.
+        if quote and MARKET_METRIC_IDS & set(state.metric_ids):
+            latest = max(f.fiscal_year for f in facts)
+            try:
+                facts = facts + [price_fact(quote(state.ticker), latest)]
+            except MarketDataUnavailable as unavailable:
+                # Not fatal: the valuation ratios report themselves unavailable,
+                # and the rest of the memo is unaffected.
+                print(f"  (no market data: {unavailable})")
 
         update = {"facts": facts}
         if state.peer_ticker:
@@ -274,6 +287,7 @@ def run_analysis(
     cost_so_far: float = 0.0,
     peer_ticker: str | None = None,
     verify: bool = True,
+    quote: Callable[[str], object] | None = None,
 ) -> AnalysisState:
     """Run the workflow and save what happened, memo or no memo.
 
@@ -287,7 +301,7 @@ def run_analysis(
         history=list(history),
         cost_usd=cost_so_far,
     )
-    graph = build_graph(analyst, settings, fetch, fetch_text, verify=verify)
+    graph = build_graph(analyst, settings, fetch, fetch_text, verify=verify, quote=quote)
 
     try:
         state = AnalysisState.model_validate(graph.invoke(state))

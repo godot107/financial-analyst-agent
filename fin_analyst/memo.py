@@ -219,6 +219,13 @@ def build_footer(
         lines.append(_source_line(peer_ticker, peer_facts))
     lines.append("Ratios use ending balances, not averages. Debt excludes lease liabilities.")
 
+    price = next((f for f in facts if f.line_item == "share_price"), None)
+    if price:
+        lines.append(
+            f"Share price from {price.accession}. Valuation ratios put that price against the "
+            "fiscal year's figures, so they are as of that date, not the year end."
+        )
+
     if peer_ticker:
         lines.append(
             "The two companies' fiscal years end on different dates, so each is shown at its own "

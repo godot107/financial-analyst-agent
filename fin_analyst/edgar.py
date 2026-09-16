@@ -85,6 +85,14 @@ INCOME_AND_CASH_FLOW_ITEMS = {
         "us-gaap:NetCashProvidedByUsedInOperatingActivities",
         "us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
     ],
+    # Diluted weighted-average shares, not the cover page's share count: this one
+    # belongs to a fiscal year, so it lines up with that year's earnings. The
+    # cover page count is dated after the year end and would land in the wrong
+    # year for a December filer.
+    "diluted_shares": [
+        "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+        "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+    ],
 }
 
 # Lines a company may simply not have. Absent means zero, not unknown.
