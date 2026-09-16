@@ -9,8 +9,12 @@ order, and keep Iteration 1 small and easy to follow; save extras for Iteration 
 
 ## Build / run
 
+Run everything from the project root (the folder holding `fin_analyst/`), inside the venv.
+`python3 -m fin_analyst` with system Python fails on imports; from inside `fin_analyst/` it
+fails to find the package at all.
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env              # ANTHROPIC_API_KEY, SEC_USER_AGENT
 pytest                            # no network, no API key needed

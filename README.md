@@ -91,12 +91,25 @@ and a single budget shared across the whole conversation, not per turn.
 ## Setup
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env    # SEC_USER_AGENT="Your Name you@example.com", ANTHROPIC_API_KEY=...
 pytest
 python -m fin_analyst MSFT "How liquid is it?" --dry-run   # spends nothing
 ```
+
+**Run it from the project root**, the folder holding `fin_analyst/`, not from inside the package —
+`python -m fin_analyst` looks for the package in the current directory.
+
+**Use the virtualenv.** Either activate it (`source .venv/bin/activate`, after which `python` is the
+venv's Python and your prompt shows `(.venv)`), or call it directly without activating:
+
+```bash
+.venv/bin/python -m fin_analyst MSFT "How liquid is it?" --dry-run
+```
+
+On Ubuntu the system command is `python3`, not `python`; inside the virtualenv both work. Running
+with system Python fails on imports, because the dependencies live in `.venv`.
 
 Cost per memo is about **$0.03**, against a $1 per-run guard that aborts a runaway. Model, effort
 and token ceilings are set per node in `config.yaml`.
