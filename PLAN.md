@@ -234,7 +234,7 @@ data, then reports every remaining digit. A year *not* in the data still counts 
 figures remembered from other years can't be smuggled in. Every problem is reported at once, since
 the writer sees them all on its retry.
 
-### Step 4 — The graph, with a fake Claude (`graph.py`)
+### Step 4 — The graph, with a fake Claude (`graph.py`) ✅
 - Wire the six nodes. The Claude-using nodes get their model client passed in, so tests can pass
   a fake one that returns scripted replies.
 - Save the run record (§3) at the end of every run.
@@ -243,6 +243,12 @@ the writer sees them all on its retry.
   - leaky draft → retry → clean draft → memo, with both drafts in the record
   - three leaky drafts → gives up, no memo, record still saved
   - `plan` choosing an unknown metric → error
+
+**As built:** `run_analysis()` wraps the graph, catches the budget stop and saves the run record
+either way; the graph itself only handles the retry loop. `Analyst` is a Protocol with two
+methods (`choose_metrics`, `write_draft`), each returning its cost, so `llm.py` fills it in at
+Step 5 and the tests script it. The record leaves `facts` out — they are bulky, and the accession
+number in the footer is what a reader needs.
 
 ### Step 5 — Real Claude (`llm.py`)
 

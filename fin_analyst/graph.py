@@ -1,0 +1,180 @@
+"""Step 4: the workflow.
+
+    START → plan → fetch → compute → write → check ──ok──→ render → END
+                                       ▲        │
+                                       └─retry──┤
+                                                └──gave up──→ END (no memo)
+
+Claude appears twice, behind the `Analyst` interface below, so tests can run the
+whole graph with a scripted stand-in and no API key. Everything else is Python.
+"""
+
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable, Protocol
+
+from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
+
+from fin_analyst.config import Settings
+from fin_analyst.edgar import Fact, fetch_facts
+from fin_analyst.memo import build_footer, find_problems, render
+from fin_analyst.metrics import METRICS_BY_ID, MetricResult, compute_all
+
+RUNS = Path(__file__).resolve().parent.parent / "runs"
+
+
+class AnalysisState(BaseModel):
+    """What the workflow knows, at every point along the way."""
+
+    ticker: str
+    question: str
+    metric_ids: list[str] = Field(default_factory=list)  # plan
+    facts: list[Fact] = Field(default_factory=list)  # fetch
+    metrics: list[MetricResult] = Field(default_factory=list)  # compute
+    drafts: list[str] = Field(default_factory=list)  # write: every attempt, latest last
+    problems: list[str] = Field(default_factory=list)  # check: latest draft's problems
+    memo: str | None = None  # render
+    cost_usd: float = 0.0
+    error: str | None = None  # gave up, or ran out of budget
+
+
+class Analyst(Protocol):
+    """The two things Claude does. `llm.py` implements this; tests fake it."""
+
+    def choose_metrics(self, ticker: str, question: str) -> tuple[list[str], float]:
+        """Metric ids to compute, and what the call cost."""
+
+    def write_draft(
+        self,
+        ticker: str,
+        question: str,
+        metrics: list[MetricResult],
+        problems: list[str],
+    ) -> tuple[str, float]:
+        """A memo draft written in placeholders, and what the call cost."""
+
+
+class BudgetExceeded(RuntimeError):
+    """A run spent more than config.yaml allows. Something is wrong; stop."""
+
+
+def build_graph(
+    analyst: Analyst,
+    settings: Settings,
+    fetch: Callable[[str], list[Fact]] = fetch_facts,
+):
+    """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
+
+    def spend(state: AnalysisState, cost: float) -> float:
+        total = state.cost_usd + cost
+        if total > settings.max_usd_per_run:
+            raise BudgetExceeded(
+                f"this run reached ${total:.2f}, over the ${settings.max_usd_per_run:.2f} limit"
+            )
+        return total
+
+    def plan(state: AnalysisState) -> dict:
+        metric_ids, cost = analyst.choose_metrics(state.ticker, state.question)
+        unknown = [i for i in metric_ids if i not in METRICS_BY_ID]
+        if unknown:
+            raise ValueError(f"the plan asked for metrics that do not exist: {unknown}")
+        return {"metric_ids": metric_ids, "cost_usd": spend(state, cost)}
+
+    def fetch_node(state: AnalysisState) -> dict:
+        facts = fetch(state.ticker)
+        if not facts:
+            raise ValueError(f"no facts found in the latest 10-K for {state.ticker}")
+        return {"facts": facts}
+
+    def compute(state: AnalysisState) -> dict:
+        return {"metrics": compute_all(state.facts, state.metric_ids)}
+
+    def write(state: AnalysisState) -> dict:
+        draft, cost = analyst.write_draft(
+            state.ticker, state.question, state.metrics, state.problems
+        )
+        return {"drafts": state.drafts + [draft], "cost_usd": spend(state, cost)}
+
+    def check(state: AnalysisState) -> dict:
+        return {"problems": find_problems(state.drafts[-1], state.metrics)}
+
+    def after_check(state: AnalysisState) -> str:
+        if not state.problems:
+            return "render"
+        if len(state.drafts) > settings.max_retries:
+            return "gave_up"
+        return "write"
+
+    def gave_up(state: AnalysisState) -> dict:
+        return {
+            "error": (
+                f"gave up after {len(state.drafts)} drafts; the last one still had: "
+                + "; ".join(state.problems)
+            )
+        }
+
+    def render_node(state: AnalysisState) -> dict:
+        footer = build_footer(state.facts, state.metrics)
+        return {"memo": render(state.drafts[-1], state.metrics, footer)}
+
+    graph = StateGraph(AnalysisState)
+    graph.add_node("plan", plan)
+    graph.add_node("fetch", fetch_node)
+    graph.add_node("compute", compute)
+    graph.add_node("write", write)
+    graph.add_node("check", check)
+    graph.add_node("gave_up", gave_up)
+    graph.add_node("render", render_node)
+
+    graph.add_edge(START, "plan")
+    graph.add_edge("plan", "fetch")
+    graph.add_edge("fetch", "compute")
+    graph.add_edge("compute", "write")
+    graph.add_edge("write", "check")
+    graph.add_conditional_edges(
+        "check",
+        after_check,
+        {"render": "render", "write": "write", "gave_up": "gave_up"},
+    )
+    graph.add_edge("render", END)
+    graph.add_edge("gave_up", END)
+    return graph.compile()
+
+
+def run_analysis(
+    ticker: str,
+    question: str,
+    analyst: Analyst,
+    settings: Settings,
+    fetch: Callable[[str], list[Fact]] = fetch_facts,
+    runs_dir: Path = RUNS,
+) -> AnalysisState:
+    """Run the workflow and save what happened, memo or no memo."""
+    state = AnalysisState(ticker=ticker.upper(), question=question)
+    graph = build_graph(analyst, settings, fetch)
+
+    try:
+        state = AnalysisState.model_validate(graph.invoke(state))
+    except BudgetExceeded as stopped:
+        state = state.model_copy(update={"error": str(stopped)})
+
+    save_run(state, runs_dir)
+    return state
+
+
+def save_run(state: AnalysisState, runs_dir: Path = RUNS) -> Path:
+    """The record of a run: what was asked, every draft, what was wrong, what it cost.
+
+    Written whether or not a memo came out, because the failures are the
+    interesting ones.
+    """
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stem = f"{state.ticker}-{stamp}"
+
+    record = runs_dir / f"{stem}.json"
+    record.write_bytes(state.model_dump_json(indent=2, exclude={"facts"}).encode() + b"\n")
+    if state.memo:
+        (runs_dir / f"{stem}.md").write_text(state.memo + "\n")
+    return record
