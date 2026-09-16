@@ -89,7 +89,9 @@ def pretty(stream: TextIO | None = None, width: int = 100) -> Sink:
     def sink(event: TraceEvent) -> None:
         data = dict(event.data)
         head = f"[{event.seconds:6.1f}s] {event.step:<8} {event.event}"
-        long_fields = {k: data.pop(k) for k in ("thinking", "draft", "text") if data.get(k)}
+        long_fields = {
+            k: data.pop(k) for k in ("thinking", "draft") if isinstance(data.get(k), str) and data[k]
+        }
         for key, value in data.items():  # short lists read better on one line
             if isinstance(value, list) and len(", ".join(map(str, value))) <= 60:
                 data[key] = ", ".join(map(str, value))

@@ -329,9 +329,8 @@ class ClaudeAnalyst:
 
     def _trace(self, node, settings, response, cost, seconds) -> None:
         blocks = list(response.content)
-        thinking = "\n\n".join(
-            getattr(b, "thinking", "") or "" for b in blocks if b.type == "thinking"
-        ).strip()
+        thought = [b for b in blocks if b.type in ("thinking", "redacted_thinking")]
+        thinking = "\n\n".join(getattr(b, "thinking", "") or "" for b in thought).strip()
         tool_input = next((b.input for b in blocks if b.type == "tool_use"), None)
         self.tracer.emit(
             "claude",
@@ -344,6 +343,9 @@ class ClaudeAnalyst:
             cost_usd=round(cost, 5),
             seconds=round(seconds, 2),
             stop_reason=response.stop_reason,
+            # Adaptive thinking may decide a call needs none, especially at low
+            # effort: 0 blocks means it didn't think, not that the summary was lost.
+            thinking_blocks=len(thought),
             thinking=thinking or None,
             tool_input=tool_input,
         )

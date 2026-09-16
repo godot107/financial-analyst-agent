@@ -344,6 +344,7 @@ def test_each_call_is_traced_with_its_thinking_and_cost(settings):
     (event,) = a.tracer.events
     assert (event.step, event.event) == ("claude", "plan")
     assert event.data["thinking"] == "Liquidity means current and quick ratios."
+    assert event.data["thinking_blocks"] == 1
     assert event.data["tool_input"] == {"metric_ids": ["current_ratio"]}
     assert event.data["input_tokens"] == 1000 and event.data["cost_usd"] > 0
 
