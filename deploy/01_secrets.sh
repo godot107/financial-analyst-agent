@@ -17,6 +17,11 @@ if [ -z "$(value_of FIN_ANALYST_API_KEYS)" ]; then
   printf '\nFIN_ANALYST_API_KEYS=willie=%s\n' "$("$PYTHON" -c 'import secrets; print(secrets.token_urlsafe(32))')" >> "$ENV_FILE"
 fi
 
+# The CLI can't read --cli-input-json from a pipe, so each request goes through a
+# file only this user can read, removed on exit.
+TMP="$(umask 077 && mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
 say "Writing secrets to SSM under /$PROJECT/"
 for NAME in ANTHROPIC_API_KEY SEC_USER_AGENT FIN_ANALYST_API_KEYS ALPHAVANTAGE_KEY; do
   VALUE="$(value_of "$NAME")"
@@ -25,8 +30,9 @@ for NAME in ANTHROPIC_API_KEY SEC_USER_AGENT FIN_ANALYST_API_KEYS ALPHAVANTAGE_K
     continue
   fi
   jq -n --arg name "/$PROJECT/$NAME" --arg value "$VALUE" \
-    '{Name: $name, Value: $value, Type: "SecureString", Overwrite: true}' \
-    | aws ssm put-parameter --cli-input-json file:///dev/stdin >/dev/null
+    '{Name: $name, Value: $value, Type: "SecureString", Overwrite: true}' > "$TMP/request.json"
+  aws ssm put-parameter --cli-input-json "file://$TMP/request.json" >/dev/null
+  rm -f "$TMP/request.json"
   echo "  $NAME: stored"
 done
 unset VALUE
