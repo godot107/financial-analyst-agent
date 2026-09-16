@@ -1,6 +1,6 @@
 # Plan: serving the analyst as an API
 
-Status: **Phase A built** (local service, tested, containerised). Phases B and C planned. Iteration 3. The CLI and batch runner work today; this plans the
+Status: **Phase A complete** (local service, tested, containerised, verified end to end). Phases B and C planned. Iteration 3. The CLI and batch runner work today; this plans the
 same workflow behind an HTTP interface so other systems can ask for memos.
 
 ## What the service is, and is not
@@ -68,8 +68,12 @@ was even constructed. Someone else's job id returns `404`, not `403`, so an id c
 The image (813 MB) was smoke-tested without spending: no `.env` inside it, runs as a non-root user,
 exits with a clear message when `FIN_ANALYST_API_KEYS` is missing or a secret is under 16
 characters, answers `401` without a key and `422` for a malformed ticker, and serves the free
-coverage route live from EDGAR. The end-to-end memo through the container is the one step left,
-because it spends money.
+coverage route live from EDGAR.
+
+**Done-when met (2026-09-16):** one real memo through the container. Submission answered `202` in
+under a second; the job finished after 27 seconds as `done`, one draft, two cited claims checked,
+**$0.0491** against a $0.06 estimate. `/v1/health` then reported $0.0491 committed — the ledger had
+replaced the estimate with the real cost, as designed.
 
 Note for Phase B: the image is large (pandas, edgartools, LangGraph), so expect cold starts of
 several seconds on Lambda. That is harmless here — submission and work are separate invocations.
