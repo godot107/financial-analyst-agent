@@ -1,0 +1,116 @@
+# Plan: serving the analyst as an API
+
+Status: **planned, not built.** Iteration 3. The CLI and batch runner work today; this plans the
+same workflow behind an HTTP interface so other systems can ask for memos.
+
+## What the service is, and is not
+
+It returns memos: figures from the filing, explanations cited and checked. It is **advisory**. A
+caller may show a memo to a person, log it, or attach it to an alert. **A caller must never wait on
+a memo to make a decision, and must never let one change a decision** until that effect has been
+tested out of sample. A memo takes tens of seconds, costs money, and can fail closed by design; none
+of that belongs in a decision path.
+
+## Three facts that shape the design
+
+**A memo is too slow for a synchronous gateway.** A memo takes roughly 30–90 seconds (two or three
+Claude calls, an SEC fetch, optionally a retry). API Gateway HTTP APIs have a maximum integration
+timeout of **30 seconds, which cannot be increased** (checked against the AWS quota page,
+2026-09-16). So the API accepts a job and returns immediately; the memo is collected later.
+
+**Every request spends money.** An unauthenticated endpoint is an open tab on the Anthropic account.
+Authentication, a per-caller daily cap, and a global daily cap are requirements, not hardening.
+
+**The SEC's fair-access rules apply to a server too.** Every request identifies itself
+(`SEC_USER_AGENT`) and stays under 10 requests a second, so batch work runs serially.
+
+## API surface (v1)
+
+| Method | Path | What it does | Cost |
+|---|---|---|---|
+| `POST` | `/v1/memos` | Submit `{ticker, question, peer?, news?, market?, verify?}`. Returns `202` with a job id, a status URL, and a cost estimate. | a memo |
+| `GET` | `/v1/memos/{id}` | `queued`, `running`, `done` (memo + run record + cost) or `failed` (the reason, e.g. "gave up after 3 drafts"). | free |
+| `POST` | `/v1/batches` | One question across tickers, with a required `max_usd`. | a memo each |
+| `GET` | `/v1/coverage/{ticker}` | Which tags matched and which ratios the filing supports. Synchronous: no model. | free |
+| `GET` | `/v1/health` | Liveness, plus today's spend against the caps. | free |
+
+An optional `notify` field on submission (a webhook URL, or a Telegram chat) delivers the finished
+memo, so a caller can fire and forget instead of polling.
+
+A failed memo is a normal response, not a server error. "Gave up after 3 drafts" means the model
+kept writing numbers itself and nothing was published — the design working.
+
+## Phases
+
+### Phase A — local service (free to run, apart from the memos)
+
+- FastAPI app exposing the routes above over the existing `run_analysis` / `run_batch` / coverage
+  code. No change to the workflow itself.
+- A single background worker and a SQLite job table: one memo at a time, which also keeps SEC
+  traffic serial.
+- API-key auth (header), a per-key daily dollar cap, and a global daily cap, all enforced before a
+  job is accepted rather than after it has spent.
+- Tests with the fake analyst, as everywhere else: no network, no key. Covers: job lifecycle, cap
+  refusal (`429` with the reset time), auth refusal, a failed memo reported as `done`/`failed`
+  rather than `500`.
+- A Dockerfile, so Phase B deploys the image that Phase A tested.
+
+**Done when:** a local client submits a memo, polls it to completion, and a request over the cap is
+refused before any Claude call is made.
+
+### Phase B — AWS, private to the account
+
+- **Container-image Lambda** (arm64) running the same image. Two entry points in one image: a thin
+  handler that validates, checks caps, records the job and returns `202`, and a worker invoked
+  asynchronously (`InvocationType=Event`) that runs the memo and writes the result.
+- **Lambda function URL with `AWS_IAM` auth**, not API Gateway. Callers are the owner's own
+  services, which already hold IAM credentials, so SigV4 signing costs nothing extra and nothing is
+  publicly reachable. The submission handler returns in well under a second, so the 30-second limit
+  never applies.
+- **State:** job records and memos in S3 (one object per job; a DynamoDB table only if listing
+  and querying become necessary). Spend counters alongside.
+- **Secrets** (`ANTHROPIC_API_KEY`, `SEC_USER_AGENT`, `ALPHAVANTAGE_KEY`) in SSM Parameter Store
+  as SecureStrings, read at cold start.
+- **Infrastructure as CloudFormation**, a least-privilege deployer role, and a teardown script.
+- **Cost guards before the first deploy:** an AWS Budgets alarm, log retention set on every log
+  group, an ECR lifecycle rule, and a CloudBurn IaC scan in CI (`--fail-on high`).
+
+**Done when:** a signed request from another service in the account gets a memo back through the
+notify hook, and teardown removes everything.
+
+### Phase C — public endpoint (optional, and last)
+
+Only if there is a reason for strangers to call it. A custom domain in front of API Gateway (the
+fast routes only), keys issued per caller, rate limits, and a public tier restricted to ratios-only
+memos (`--no-text --no-verify`, ~$0.03) with a small global daily cap. A web application firewall
+adds a monthly charge; price it before adding it.
+
+## Rough costs
+
+| | Per memo |
+|---|---|
+| Claude calls | $0.03–0.09 (measured) |
+| Lambda compute, SEC fetches, S3 | a fraction of a cent (estimate; verify against current AWS pricing) |
+
+The model dominates. A daily batch over ten tickers is roughly **$0.60 a day, ~$18 a month**, so
+scheduled batches should default to a short list or a weekly cadence, with `max_usd` required.
+
+## Client integration pattern
+
+```python
+# In the caller: never awaited by anything that decides.
+submit_memo(ticker, question, notify=alert_channel)   # returns in < 1s, or fails silently
+```
+
+- **Fire and forget.** The call happens after the decision is made and executed, never before.
+- **Fail open for the caller.** If the service is down, the caller's job continues unchanged; the
+  failure is logged, not raised.
+- **Keep the analyst out of backtests.** The model has read about most of history. A memo generated
+  inside a historical simulation is recall, not analysis, and would contaminate the test.
+- **Mirror the isolation test** in the caller: its decision code may not import the analyst client.
+
+## Open questions
+
+- Whether news should come from a source the caller already pays for (for example a broker's news
+  API) rather than 8-K exhibits alone.
+- Whether one memo per event is too many: a digest per day may be more useful and cheaper.

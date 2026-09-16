@@ -470,6 +470,13 @@ Pick from these based on what Iteration 1 taught:
 - Banks and insurers (current ratio doesn't apply)
 - Publish: public repo, blog post
 
+## Iteration 3 (planned): serve it as an API
+
+See [`docs/API_PLAN.md`](docs/API_PLAN.md). In short: an async job API (a memo takes longer than
+API Gateway's fixed 30-second limit), local FastAPI first, then a container-image Lambda behind an
+IAM-authenticated function URL, with per-caller and global daily spend caps enforced before any
+Claude call. Callers treat memos as advisory, fire-and-forget, and never inside a backtest.
+
 ## 7. Known traps
 
 - **XBRL values are in raw units, not millions.** Format at render time only.
