@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is built but not deployed — see `docs/API_PLAN.md`. 228 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 235 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -28,14 +28,14 @@ python scripts/batch.py "How liquid is it?" MSFT COST --dry-run
 python -m fin_analyst MSFT "..." --dry-run                        # spends nothing
 ```
 
-Project-local `.venv`. Local only: no AWS or Bedrock.
+Project-local `.venv`. Runs locally, or on AWS Lambda via `deploy/` (no Bedrock: the Claude API directly).
 
 ## Rules
 
 - **Claude never writes a number.** Metrics come from `metrics.py`, and the memo uses
   `{{metric:year}}` / `{{metric:year->year}}` placeholders that `memo.render` fills. A digit
   outside a placeholder fails the check.
-- **Only `llm.py`, `graph.py`, `__main__.py` and `server.py` may import `anthropic` or `fin_analyst.llm`.**
+- **Only `llm.py`, `graph.py`, `__main__.py`, `server.py` and `lambda_handler.py` may import `anthropic` or `fin_analyst.llm`.**
   `tests/test_llm_isolation.py` enforces this.
 - **The words have rules too** (`PLAN.md` §2): year-over-year framing, no business reasons in
   Iteration 1, no rules of thumb, about 250 words. Prose from memory is the remaining risk once
@@ -46,7 +46,9 @@ Project-local `.venv`. Local only: no AWS or Bedrock.
 - **Ratio definitions follow the textbooks cited in `PLAN.md` Step 2.** Use parent-only net
   income and equity. Quick ratio = (cash + short-term investments + receivables) / current
   liabilities. Debt = the sum of the debt lines, never total liabilities.
-- **Every run saves a JSON run record in `runs/`**, even when no memo is produced.
+- **Every run saves a JSON run record in `runs/`**, even when no memo is produced. It includes the
+  trace (`fin_analyst/trace.py`): each node's output and timing, and each Claude call's tokens, cost
+  and summarized thinking. A sink that fails must never fail the run.
 - **Never trust the filing's `fiscal_year` column** — derive the year from the period end date
   (`fiscal_year_of`). Late-August filers label last year's figures with this year.
 - **Values that move between nodes are Pydantic models** (`Fact`, `MetricResult`, the graph state,

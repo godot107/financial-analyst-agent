@@ -16,6 +16,7 @@ from fin_analyst.config import Settings
 from fin_analyst.edgar import Fact, fetch_facts
 from fin_analyst.graph import RUNS, AnalysisState, Analyst, run_analysis
 from fin_analyst.passages import Passage, fetch_passages
+from fin_analyst.trace import Tracer
 
 
 class ChatSession:
@@ -30,7 +31,9 @@ class ChatSession:
         runs_dir: Path = RUNS,
         peer_ticker: str | None = None,
         fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
+        tracer: Tracer | None = None,
     ):
+        self.tracer = tracer
         self.ticker = ticker.upper()
         self.peer_ticker = peer_ticker.upper() if peer_ticker else None
         self.analyst = analyst
@@ -68,6 +71,7 @@ class ChatSession:
             peer_ticker=self.peer_ticker,
             history=self.history,
             cost_so_far=self.spent_usd,
+            tracer=self.tracer,
         )
 
         self.spent_usd = state.cost_usd

@@ -6,6 +6,8 @@ is allowed to produce a number — the planner picks ids from an enum, and the
 writer writes placeholders.
 """
 
+import time
+
 import anthropic
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -13,6 +15,7 @@ from fin_analyst.config import Settings
 from fin_analyst.graph import AnalysisFailed
 from fin_analyst.metrics import METRICS_BY_ID, MetricResult, describe_metrics
 from fin_analyst.passages import Passage
+from fin_analyst.trace import Tracer
 
 PLANNER_SYSTEM = """You choose which financial ratios answer a question about one company.
 You never compute, estimate or state a number.
@@ -262,6 +265,9 @@ class ClaudeAnalyst:
         # Every call's cost, including calls whose reply we then reject, so a
         # failed run still reports what it spent.
         self.spent_usd = 0.0
+        # Where each call reports its tokens, cost and thinking. run_analysis
+        # swaps in the run's own tracer; this default just collects.
+        self.tracer = Tracer()
 
     def _call(self, node: str, system: str, user: str, tools: list[dict] | None = None):
         settings = self.settings.nodes[node]
@@ -270,13 +276,20 @@ class ClaudeAnalyst:
             max_tokens=settings.max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
-            thinking={"type": "adaptive"},
+            # "summarized" returns a readable summary of the thinking for the trace.
+            # Opus 5 never returns raw thinking, and the default ("omitted") returns
+            # empty blocks. Billing is the same either way.
+            thinking={
+                "type": "adaptive",
+                "display": "summarized" if self.settings.thinking_summaries else "omitted",
+            },
             output_config={"effort": settings.effort},
         )
         if tools:
             request["tools"] = tools
             request["tool_choice"] = {"type": "tool", "name": tools[0]["name"]}
 
+        started = time.monotonic()
         try:
             if self.refusal_fallbacks:
                 response = self.client.beta.messages.create(
@@ -302,6 +315,7 @@ class ClaudeAnalyst:
             settings.model, response.usage.input_tokens, response.usage.output_tokens
         )
         self.spent_usd += cost
+        self._trace(node, settings, response, cost, time.monotonic() - started)
 
         if response.stop_reason == "refusal":
             details = getattr(response, "stop_details", None)
@@ -312,6 +326,27 @@ class ClaudeAnalyst:
                 "raise max_tokens in config.yaml or ask for a shorter memo"
             )
         return response, cost
+
+    def _trace(self, node, settings, response, cost, seconds) -> None:
+        blocks = list(response.content)
+        thinking = "\n\n".join(
+            getattr(b, "thinking", "") or "" for b in blocks if b.type == "thinking"
+        ).strip()
+        tool_input = next((b.input for b in blocks if b.type == "tool_use"), None)
+        self.tracer.emit(
+            "claude",
+            node,
+            # The model that answered: a refusal fallback may differ from the one asked.
+            model=getattr(response, "model", settings.model),
+            effort=settings.effort,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cost_usd=round(cost, 5),
+            seconds=round(seconds, 2),
+            stop_reason=response.stop_reason,
+            thinking=thinking or None,
+            tool_input=tool_input,
+        )
 
     def choose_metrics(self, ticker: str, question: str) -> tuple[list[str], float]:
         response, cost = self._call(

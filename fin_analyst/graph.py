@@ -12,6 +12,7 @@ Claude appears twice, behind the `Analyst` interface below, so tests can run the
 whole graph with a scripted stand-in and no API key. Everything else is Python.
 """
 
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Protocol
@@ -25,6 +26,7 @@ from fin_analyst.memo import build_footer, cited_claims, find_problems, render
 from fin_analyst.market import MarketDataUnavailable, fetch_quote, price_fact
 from fin_analyst.metrics import MARKET_METRIC_IDS, METRICS_BY_ID, MetricResult, compute_all
 from fin_analyst.passages import Passage, fetch_passages, search
+from fin_analyst.trace import TraceEvent, Tracer
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
 
@@ -65,6 +67,8 @@ class AnalysisState(BaseModel):
     history: list[tuple[str, str]] = Field(default_factory=list)
     cost_usd: float = 0.0  # this run, plus anything spent earlier in the session
     error: str | None = None  # gave up, or ran out of budget
+    # Every step as it happened, including Claude's summarized thinking.
+    trace: list[TraceEvent] = Field(default_factory=list)
 
 
 class Analyst(Protocol):
@@ -108,8 +112,10 @@ def build_graph(
     quote: Callable[[str], object] | None = None,
     fetch_news: Callable[[str], list[Passage]] | None = None,
     news_k: int = 3,
+    tracer: Tracer | None = None,
 ):
     """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
+    tracer = tracer or Tracer()
 
     def spend(state: AnalysisState, cost: float) -> float:
         total = state.cost_usd + cost
@@ -141,6 +147,7 @@ def build_graph(
                 # Not fatal: the valuation ratios report themselves unavailable,
                 # and the rest of the memo is unaffected.
                 print(f"  (no market data: {unavailable})")
+                tracer.emit("fetch", "no market data", reason=str(unavailable))
 
         update = {"facts": facts}
         if state.peer_ticker:
@@ -223,14 +230,22 @@ def build_graph(
 
     def after_check(state: AnalysisState) -> str:
         if state.problems:
-            return "write" if len(state.drafts) <= settings.max_retries else "gave_up"
+            route = "write" if len(state.drafts) <= settings.max_retries else "gave_up"
         # Nothing wrong with the mechanics; now ask whether the citations hold.
-        return "verify" if verify and cited_claims(state.drafts[-1], state.passages) else "render"
+        elif verify and cited_claims(state.drafts[-1], state.passages):
+            route = "verify"
+        else:
+            route = "render"
+        tracer.emit("route", f"check -> {route}", problems=len(state.problems))
+        return route
 
     def after_verify(state: AnalysisState) -> str:
         if not state.problems:
-            return "render"
-        return "write" if len(state.drafts) <= settings.max_retries else "gave_up"
+            route = "render"
+        else:
+            route = "write" if len(state.drafts) <= settings.max_retries else "gave_up"
+        tracer.emit("route", f"verify -> {route}", problems=len(state.problems))
+        return route
 
     def gave_up(state: AnalysisState) -> dict:
         return {
@@ -251,16 +266,33 @@ def build_graph(
             )
         }
 
+    def traced(name: str, node: Callable[[AnalysisState], dict]):
+        """Time a node and record what it produced, or why it failed."""
+
+        def run(state: AnalysisState) -> dict:
+            started = time.monotonic()
+            try:
+                update = node(state)
+            except Exception as failed:
+                tracer.emit(name, "failed", seconds=round(time.monotonic() - started, 2), error=str(failed))
+                raise
+            tracer.emit(
+                name, "done", seconds=round(time.monotonic() - started, 2), **summarize(name, state, update)
+            )
+            return update
+
+        return run
+
     graph = StateGraph(AnalysisState)
-    graph.add_node("plan", plan)
-    graph.add_node("fetch", fetch_node)
-    graph.add_node("compute", compute)
-    graph.add_node("retrieve", retrieve)
-    graph.add_node("write", write)
-    graph.add_node("check", check)
-    graph.add_node("verify", verify_node)
-    graph.add_node("gave_up", gave_up)
-    graph.add_node("render", render_node)
+    graph.add_node("plan", traced("plan", plan))
+    graph.add_node("fetch", traced("fetch", fetch_node))
+    graph.add_node("compute", traced("compute", compute))
+    graph.add_node("retrieve", traced("retrieve", retrieve))
+    graph.add_node("write", traced("write", write))
+    graph.add_node("check", traced("check", check))
+    graph.add_node("verify", traced("verify", verify_node))
+    graph.add_node("gave_up", traced("gave_up", gave_up))
+    graph.add_node("render", traced("render", render_node))
 
     graph.add_edge(START, "plan")
     graph.add_edge("plan", "fetch")
@@ -283,6 +315,47 @@ def build_graph(
     return graph.compile()
 
 
+def summarize(name: str, state: AnalysisState, update: dict) -> dict:
+    """The part of a node's output worth reading in a trace, kept short."""
+    if name == "plan":
+        return {"metric_ids": update["metric_ids"]}
+    if name == "fetch":
+        years = sorted({f.fiscal_year for f in update["facts"]})
+        return {
+            "facts": len(update["facts"]),
+            "fiscal_years": years,
+            "peer_facts": len(update.get("peer_facts", [])) or None,
+        }
+    if name == "compute":
+        def show(metrics, prefix=""):
+            return [
+                f"{prefix}{m.metric_id}:{m.fiscal_year} = "
+                + (f"unavailable ({m.reason})" if m.value is None else f"{m.value:.4f}")
+                for m in metrics
+            ]
+        return {"values": show(update["metrics"]) + show(update["peer_metrics"], "peer.")}
+    if name == "retrieve":
+        return {
+            "passages": [f"[{p.id}] {p.item}: {p.text[:140]}..." for p in update["passages"]]
+        }
+    if name == "write":
+        return {"attempt": len(update["drafts"]), "draft": update["drafts"][-1]}
+    if name == "check":
+        return {"problems": update["problems"]}
+    if name == "verify":
+        new = update["claim_checks"][len(state.claim_checks):]
+        return {
+            "verdicts": [
+                f"{'supported' if c.supported else 'NOT supported'} {c.cited}: {c.reason}" for c in new
+            ]
+        }
+    if name == "gave_up":
+        return {"error": update["error"]}
+    if name == "render":
+        return {"memo_chars": len(update["memo"])}
+    return {}
+
+
 def run_analysis(
     ticker: str,
     question: str,
@@ -297,6 +370,7 @@ def run_analysis(
     verify: bool = True,
     quote: Callable[[str], object] | None = None,
     fetch_news: Callable[[str], list[Passage]] | None = None,
+    tracer: Tracer | None = None,
 ) -> AnalysisState:
     """Run the workflow and save what happened, memo or no memo.
 
@@ -310,14 +384,31 @@ def run_analysis(
         history=list(history),
         cost_usd=cost_so_far,
     )
+    tracer = tracer or Tracer()
+    if hasattr(analyst, "tracer"):
+        analyst.tracer = tracer  # so its calls land in this run's trace
+    first_event = len(tracer.events)
+    tracer.emit(
+        "run", "start", ticker=state.ticker, question=question, peer=state.peer_ticker,
+        text=fetch_text is not None, verify=verify, news=fetch_news is not None,
+        market=quote is not None,
+    )
     graph = build_graph(
-        analyst, settings, fetch, fetch_text, verify=verify, quote=quote, fetch_news=fetch_news
+        analyst, settings, fetch, fetch_text, verify=verify, quote=quote, fetch_news=fetch_news,
+        tracer=tracer,
     )
 
     try:
         state = AnalysisState.model_validate(graph.invoke(state))
     except AnalysisFailed as stopped:
         state = state.model_copy(update={"error": str(stopped)})
+
+    tracer.emit(
+        "run", "done" if state.memo else "failed",
+        drafts=len(state.drafts), cost_usd=round(getattr(analyst, "spent_usd", state.cost_usd), 5),
+        error=state.error,
+    )
+    state = state.model_copy(update={"trace": tracer.events[first_event:]})
 
     save_run(state, runs_dir)
     return state

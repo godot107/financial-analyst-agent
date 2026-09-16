@@ -374,3 +374,54 @@ def test_a_missing_price_costs_the_valuation_ratios_and_nothing_else(settings, f
     assert state.memo, "the rest of the memo should be unaffected"
     pe = next(m for m in state.metrics if m.metric_id == "pe_ratio")
     assert pe.value is None and "share_price" in pe.reason
+
+
+# --- the trace -------------------------------------------------------------
+
+
+def test_the_trace_shows_each_step_retries_included(settings, facts, tmp_path):
+    state = run(FakeAnalyst([LEAKY_DRAFT, CLEAN_DRAFT]), settings, facts, tmp_path)
+
+    steps = [(e.step, e.event) for e in state.trace]
+    assert steps[0] == ("run", "start") and steps[-1] == ("run", "done")
+    assert ("plan", "done") in steps and ("render", "done") in steps
+    assert steps.count(("write", "done")) == 2
+    assert ("route", "check -> write") in steps  # the retry, and why
+    check = next(e for e in state.trace if e.step == "check")
+    assert any("wrote yourself" in p for p in check.data["problems"])
+    compute = next(e for e in state.trace if e.step == "compute")
+    assert any(v.startswith("current_ratio:2026 = ") for v in compute.data["values"])
+
+    record = json.loads(records_in(tmp_path)[0].read_text())
+    assert [e["step"] for e in record["trace"]] == [e.step for e in state.trace]
+
+
+def test_a_failed_run_is_traced_too(settings, facts, tmp_path):
+    state = run(FakeAnalyst([LEAKY_DRAFT] * 3), settings, facts, tmp_path)
+    assert state.trace[-1].event == "failed"
+    assert "gave up" in state.trace[-1].data["error"]
+
+
+def test_a_live_sink_sees_events_as_they_happen(settings, facts, tmp_path):
+    import io
+
+    from fin_analyst.trace import Tracer, json_lines, pretty
+
+    lines, readable = io.StringIO(), io.StringIO()
+    run(
+        FakeAnalyst([CLEAN_DRAFT]), settings, facts, tmp_path,
+        tracer=Tracer([json_lines({"job_id": "j1"}, lines), pretty(readable)]),
+    )
+    first = json.loads(lines.getvalue().splitlines()[0])
+    assert first["job_id"] == "j1" and first["trace"]["step"] == "run"
+    assert "draft:" in readable.getvalue()  # long fields are printed, wrapped
+
+
+def test_a_broken_sink_does_not_break_the_run(settings, facts, tmp_path):
+    from fin_analyst.trace import Tracer
+
+    def broken(event):
+        raise OSError("disk full")
+
+    state = run(FakeAnalyst([CLEAN_DRAFT]), settings, facts, tmp_path, tracer=Tracer([broken]))
+    assert state.memo is not None

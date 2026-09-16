@@ -119,6 +119,9 @@ docker run --rm -p 127.0.0.1:8000:8000 --env-file .env fin-analyst
 Daily caps per key and overall live under `api:` in `config.yaml` ($1 and $3 by default), and are
 checked when a job is submitted, before anything is spent.
 
+To watch a memo being worked out step by step, including a summary of Claude's thinking, add
+`--verbose` to any CLI run. Calling the AWS deployment is in [`docs/CALLING.md`](docs/CALLING.md).
+
 ## When something goes wrong
 
 | What you see | What it means |

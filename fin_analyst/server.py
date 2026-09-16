@@ -59,6 +59,7 @@ def main() -> int:
         fetch_news=partial(fetch_news, cache=cache),
         quote=partial(fetch_quote, cache=cache),
         cache=cache,
+        trace_log="pretty",  # each job's steps and thinking, in this terminal
     )
     app = create_app(store, settings, keys, worker, run_worker=True)
 

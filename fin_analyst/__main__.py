@@ -13,6 +13,7 @@ from fin_analyst.graph import run_analysis
 from fin_analyst.market import fetch_quote
 from fin_analyst.news import fetch_news
 from fin_analyst.passages import fetch_passages
+from fin_analyst.trace import Tracer, pretty
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,6 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="keep asking follow-ups about the same company (a few turns, one shared budget)",
     )
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="print each step as it happens, with a summary of Claude's thinking",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="show the settings and stop, without calling Claude or spending anything",
@@ -109,9 +115,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # None means "don't read the narrative at all"; the default reads Item 7 and 1A.
     fetch_text = None if args.no_text else partial(fetch_passages, cache=cache)
+    # The trace is always kept in the run record; --verbose also prints it live.
+    tracer = Tracer([pretty()] if args.verbose else [])
 
     if args.chat:
-        return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text)
+        return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text, tracer)
 
     state = run_analysis(
         ticker, args.question, analyst, settings, peer_ticker=args.peer,
@@ -123,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             if (args.news or args.news_index)
             else None
         ),
+        tracer=tracer,
     )
     show(state, analyst)
     return 0 if state.memo else 1
@@ -138,11 +147,13 @@ def show(state, analyst) -> None:
     print(f"\n[{len(state.drafts)} draft(s), ${analyst.spent_usd:.4f} spent]", file=sys.stderr)
 
 
-def run_chat(ticker, question, analyst, settings, peer=None, fetch_text=None) -> int:
+def run_chat(ticker, question, analyst, settings, peer=None, fetch_text=None, tracer=None) -> int:
     """Ask follow-ups until the turns or the budget run out, whichever comes first."""
     from fin_analyst.chat import ChatSession
 
-    chat = ChatSession(ticker, analyst, settings, peer_ticker=peer, fetch_text=fetch_text)
+    chat = ChatSession(
+        ticker, analyst, settings, peer_ticker=peer, fetch_text=fetch_text, tracer=tracer
+    )
     answered = 0
 
     while question:

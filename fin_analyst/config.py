@@ -35,6 +35,8 @@ class Settings:
     sec_user_agent: str | None  # SEC rejects downloads without one
     api_per_key_daily_usd: float = 1.00  # the HTTP service's caps, per UTC day
     api_global_daily_usd: float = 3.00
+    # Ask Claude for a summary of its thinking, for the run's trace.
+    thinking_summaries: bool = True
 
     def cost_usd(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """What one call cost. Thinking tokens are billed as output."""
@@ -67,6 +69,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         sec_user_agent=os.environ.get("SEC_USER_AGENT") or None,
         api_per_key_daily_usd=float(raw.get("api", {}).get("per_key_daily_usd", 1.00)),
         api_global_daily_usd=float(raw.get("api", {}).get("global_daily_usd", 3.00)),
+        thinking_summaries=bool(raw.get("thinking_summaries", True)),
     )
 
     if settings.max_usd_per_run <= 0:

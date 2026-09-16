@@ -76,6 +76,7 @@ def test_a_memo_is_accepted_at_once_and_collected_later(service):
     assert "fell 0.12x to 1.23x" in job["memo"]
     assert job["cost_usd"] > 0
     assert job["result"]["metric_ids"] == ["current_ratio"]
+    assert [e["step"] for e in job["result"]["trace"]][:2] == ["run", "plan"]
 
 
 def test_a_memo_that_fails_closed_is_a_result_not_a_server_error(tmp_path):

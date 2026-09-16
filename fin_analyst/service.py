@@ -38,6 +38,7 @@ from fin_analyst.jobs import Job, JobStore, next_reset
 from fin_analyst.market import fetch_quote
 from fin_analyst.news import fetch_news
 from fin_analyst.passages import fetch_passages
+from fin_analyst.trace import Tracer, json_lines, pretty
 
 TICKER = r"^[A-Za-z][A-Za-z.\-]{0,9}$"
 # A memo without the filing's narrative and without the claim check.
@@ -91,7 +92,13 @@ class Worker:
         quote=fetch_quote,
         cache=None,
         lookup_accession=latest_accession,
+        trace_log: str | None = None,
     ):
+        # "json": one JSON line per trace event on stdout (CloudWatch on Lambda);
+        # "pretty": readable lines on stderr; None: kept in the job result only.
+        if trace_log not in (None, "json", "pretty"):
+            raise ValueError(f"trace_log must be json, pretty or None, not {trace_log!r}")
+        self.trace_log = trace_log
         self.store = store
         self.cache = cache
         self.lookup_accession = lookup_accession
@@ -174,6 +181,7 @@ class Worker:
             return
 
         analyst = make_analyst()
+        sinks = {"json": [json_lines({"job_id": job.id})], "pretty": [pretty()]}.get(self.trace_log, [])
         state = run_analysis(
             request.ticker,
             request.question,
@@ -186,11 +194,14 @@ class Worker:
             verify=request.verify,
             quote=self.quote if request.market else None,
             fetch_news=self.fetch_news if request.news else None,
+            tracer=Tracer(sinks),
         )
         result = {
             "metric_ids": state.metric_ids,
             "drafts": len(state.drafts),
             "claim_checks": [check.model_dump() for check in state.claim_checks],
+            # Every step, with Claude's summarized thinking: how the memo was reached.
+            "trace": [event.model_dump() for event in state.trace],
         }
         self.store.finish(
             job.id,

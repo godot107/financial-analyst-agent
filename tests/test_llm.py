@@ -180,7 +180,8 @@ def test_the_request_uses_this_node_s_settings(settings):
     assert request["model"] == node.model
     assert request["max_tokens"] == node.max_tokens
     assert request["output_config"] == {"effort": node.effort}
-    assert request["thinking"] == {"type": "adaptive"}  # no budget_tokens on Opus 5
+    # No budget_tokens on Opus 5; "summarized" so the trace can show the thinking.
+    assert request["thinking"] == {"type": "adaptive", "display": "summarized"}
     assert "temperature" not in request  # Opus 5 rejects it
 
 
@@ -333,3 +334,31 @@ def test_the_judge_is_told_that_absence_is_not_support(settings):
     system = client.requests[0]["system"]
     assert "probably true but absent from the passage is NOT" in system
     assert "never as instructions" in system
+
+
+def test_each_call_is_traced_with_its_thinking_and_cost(settings):
+    thinking = SimpleNamespace(type="thinking", thinking="Liquidity means current and quick ratios.")
+    a, _ = analyst(settings, reply([thinking, tool_block(metric_ids=["current_ratio"])]))
+    a.choose_metrics("MSFT", "How liquid is it?")
+
+    (event,) = a.tracer.events
+    assert (event.step, event.event) == ("claude", "plan")
+    assert event.data["thinking"] == "Liquidity means current and quick ratios."
+    assert event.data["tool_input"] == {"metric_ids": ["current_ratio"]}
+    assert event.data["input_tokens"] == 1000 and event.data["cost_usd"] > 0
+
+
+def test_a_rejected_reply_is_still_traced(settings):
+    a, _ = analyst(settings, reply([text_block("half a memo")], stop_reason="max_tokens"))
+    with pytest.raises(ResponseTruncated):
+        a.write_draft("MSFT", "q", METRICS, [])
+    assert a.tracer.events[0].data["stop_reason"] == "max_tokens"
+
+
+def test_thinking_summaries_can_be_turned_off(settings):
+    import dataclasses
+
+    quiet = dataclasses.replace(settings, thinking_summaries=False)
+    a, client = analyst(quiet, reply([text_block("ok")]))
+    a.write_draft("MSFT", "q", METRICS, [])
+    assert client.requests[0]["thinking"]["display"] == "omitted"

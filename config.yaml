@@ -17,6 +17,11 @@ nodes:
     effort: low # judging support against a quoted passage is a reading task
     max_tokens: 1024
 
+# Return a summary of each call's thinking, for the trace (--verbose, the run
+# record, and the API's job result). Billing is the same either way: thinking is
+# charged in full whether or not a summary comes back.
+thinking_summaries: true
+
 # USD per million tokens. Check https://platform.claude.com/docs/en/pricing
 # before changing, and add a row before pointing a node at a new model.
 prices_per_million_tokens:

@@ -93,6 +93,9 @@ def build(ssm=None, s3=None, lambda_client=None, analyst_factory=None, worker_kw
         settings,
         analyst_factory=analyst_factory,
         runs_dir=_tmp("runs"),
+        # Each step as a JSON line, so CloudWatch shows a memo being worked out
+        # while it runs: aws logs tail /aws/lambda/fin-analyst --follow
+        trace_log="json",
         **{**sources, **(worker_kwargs or {})},
     )
 
