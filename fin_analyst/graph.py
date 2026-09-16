@@ -29,9 +29,14 @@ class AnalysisState(BaseModel):
 
     ticker: str
     question: str
+    # The company to compare against, if any. Its ratios are computed the same
+    # way and reach the writer as {{peer.metric:year}} placeholders.
+    peer_ticker: str | None = None
     metric_ids: list[str] = Field(default_factory=list)  # plan
     facts: list[Fact] = Field(default_factory=list)  # fetch
+    peer_facts: list[Fact] = Field(default_factory=list)
     metrics: list[MetricResult] = Field(default_factory=list)  # compute
+    peer_metrics: list[MetricResult] = Field(default_factory=list)
     drafts: list[str] = Field(default_factory=list)  # write: every attempt, latest last
     problems: list[str] = Field(default_factory=list)  # check: latest draft's problems
     memo: str | None = None  # render
@@ -55,6 +60,8 @@ class Analyst(Protocol):
         metrics: list[MetricResult],
         problems: list[str],
         history: list[tuple[str, str]] = (),
+        peer_ticker: str | None = None,
+        peer_metrics: list[MetricResult] = (),
     ) -> tuple[str, float]:
         """A memo draft written in placeholders, and what the call cost."""
 
@@ -93,19 +100,35 @@ def build_graph(
         facts = fetch(state.ticker)
         if not facts:
             raise ValueError(f"no facts found in the latest 10-K for {state.ticker}")
-        return {"facts": facts}
+
+        update = {"facts": facts}
+        if state.peer_ticker:
+            peer_facts = fetch(state.peer_ticker)
+            if not peer_facts:
+                raise ValueError(f"no facts found in the latest 10-K for {state.peer_ticker}")
+            update["peer_facts"] = peer_facts
+        return update
 
     def compute(state: AnalysisState) -> dict:
-        return {"metrics": compute_all(state.facts, state.metric_ids)}
+        return {
+            "metrics": compute_all(state.facts, state.metric_ids),
+            "peer_metrics": compute_all(state.peer_facts, state.metric_ids),
+        }
 
     def write(state: AnalysisState) -> dict:
         draft, cost = analyst.write_draft(
-            state.ticker, state.question, state.metrics, state.problems, state.history
+            state.ticker,
+            state.question,
+            state.metrics,
+            state.problems,
+            state.history,
+            state.peer_ticker,
+            state.peer_metrics,
         )
         return {"drafts": state.drafts + [draft], "cost_usd": spend(state, cost)}
 
     def check(state: AnalysisState) -> dict:
-        return {"problems": find_problems(state.drafts[-1], state.metrics)}
+        return {"problems": find_problems(state.drafts[-1], state.metrics, state.peer_metrics)}
 
     def after_check(state: AnalysisState) -> str:
         if not state.problems:
@@ -123,8 +146,10 @@ def build_graph(
         }
 
     def render_node(state: AnalysisState) -> dict:
-        footer = build_footer(state.facts, state.metrics)
-        return {"memo": render(state.drafts[-1], state.metrics, footer)}
+        footer = build_footer(
+            state.facts, state.metrics, state.ticker, state.peer_facts, state.peer_ticker
+        )
+        return {"memo": render(state.drafts[-1], state.metrics, footer, state.peer_metrics)}
 
     graph = StateGraph(AnalysisState)
     graph.add_node("plan", plan)
@@ -159,6 +184,7 @@ def run_analysis(
     runs_dir: Path = RUNS,
     history: list[tuple[str, str]] = (),
     cost_so_far: float = 0.0,
+    peer_ticker: str | None = None,
 ) -> AnalysisState:
     """Run the workflow and save what happened, memo or no memo.
 
@@ -168,6 +194,7 @@ def run_analysis(
     state = AnalysisState(
         ticker=ticker.upper(),
         question=question,
+        peer_ticker=peer_ticker.upper() if peer_ticker else None,
         history=list(history),
         cost_usd=cost_so_far,
     )
@@ -193,7 +220,9 @@ def save_run(state: AnalysisState, runs_dir: Path = RUNS) -> Path:
     stem = f"{state.ticker}-{stamp}"
 
     record = runs_dir / f"{stem}.json"
-    record.write_bytes(state.model_dump_json(indent=2, exclude={"facts"}).encode() + b"\n")
+    record.write_bytes(
+        state.model_dump_json(indent=2, exclude={"facts", "peer_facts"}).encode() + b"\n"
+    )
     if state.memo:
         (runs_dir / f"{stem}.md").write_text(state.memo + "\n")
     return record

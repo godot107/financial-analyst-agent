@@ -27,14 +27,17 @@ class ChatSession:
         settings: Settings,
         fetch: Callable[[str], list[Fact]] = fetch_facts,
         runs_dir: Path = RUNS,
+        peer_ticker: str | None = None,
     ):
         self.ticker = ticker.upper()
+        self.peer_ticker = peer_ticker.upper() if peer_ticker else None
         self.analyst = analyst
         self.settings = settings
         self.runs_dir = runs_dir
         # Fetched once, reused by every turn: the filing does not change while
         # you are asking about it.
         self.facts = fetch(self.ticker)
+        self.peer_facts = fetch(self.peer_ticker) if self.peer_ticker else []
         self.history: list[tuple[str, str]] = []
         self.spent_usd = 0.0
 
@@ -54,8 +57,9 @@ class ChatSession:
             question,
             self.analyst,
             self.settings,
-            fetch=lambda ticker: self.facts,
+            fetch=lambda ticker: self.peer_facts if ticker == self.peer_ticker else self.facts,
             runs_dir=self.runs_dir,
+            peer_ticker=self.peer_ticker,
             history=self.history,
             cost_so_far=self.spent_usd,
         )

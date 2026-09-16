@@ -28,18 +28,30 @@ class FakeAnalyst:
         self.cost = cost
         self.problems_seen = []
         self.history_seen = []
+        self.peers_seen = []
 
     def choose_metrics(self, ticker, question):
         return self.metric_ids, self.cost
 
-    def write_draft(self, ticker, question, metrics, problems, history=()):
+    def write_draft(
+        self,
+        ticker,
+        question,
+        metrics,
+        problems,
+        history=(),
+        peer_ticker=None,
+        peer_metrics=(),
+    ):
         self.problems_seen.append(problems)
         self.history_seen.append(list(history))
+        self.peers_seen.append((peer_ticker, list(peer_metrics)))
         return self.drafts.pop(0), self.cost
 
 
 @pytest.fixture
 def facts():
+    """The same recorded filing for any ticker: these tests are about wiring."""
     loaded = load_facts(FIXTURE)
     return lambda ticker: loaded
 
@@ -66,7 +78,7 @@ def test_a_clean_draft_becomes_a_memo(settings, facts, tmp_path):
     assert state.error is None
     assert "fell 0.12x to 1.23x" in state.memo  # the renderer wrote the direction
     assert "{{" not in state.memo
-    assert "Source: SEC filing 0001193125-26-323660" in state.memo  # footer is attached
+    assert "MSFT: SEC filing 0001193125-26-323660" in state.memo  # footer names the company
     assert "No peer comparison" in state.memo
     assert len(records_in(tmp_path)) == 1
     assert len(list(tmp_path.glob("*.md"))) == 1
@@ -133,3 +145,44 @@ def test_the_record_says_what_happened(settings, facts, tmp_path):
 def test_state_starts_empty_but_valid():
     state = AnalysisState(ticker="MSFT", question="anything?")
     assert state.drafts == [] and state.cost_usd == 0.0 and state.memo is None
+
+
+# --- comparing two companies --------------------------------------------
+
+PEER_DRAFT = (
+    "Liquidity eased: the current ratio {{current_ratio:2025->2026}}, "
+    "against the peer's {{peer.current_ratio:2026}}."
+)
+
+
+def test_a_peer_is_fetched_computed_and_rendered(settings, facts, tmp_path):
+    fetched = []
+
+    def fetch(ticker):
+        fetched.append(ticker)
+        return facts(ticker)
+
+    analyst = FakeAnalyst([PEER_DRAFT])
+    state = run_analysis(
+        "msft", "How does it compare?", analyst, settings,
+        fetch=fetch, runs_dir=tmp_path, peer_ticker="googl",
+    )
+
+    assert fetched == ["MSFT", "GOOGL"]  # both filings, in order
+    assert state.peer_metrics and state.peer_ticker == "GOOGL"
+    assert analyst.peers_seen[0][0] == "GOOGL"  # the writer was told who the peer is
+    assert "{{" not in state.memo
+    assert "1.23x" in state.memo  # the peer value rendered
+    assert "GOOGL: SEC filing" in state.memo
+    assert "fiscal years end on different dates" in state.memo
+
+
+def test_a_peer_placeholder_without_a_peer_is_caught(settings, facts, tmp_path):
+    """Otherwise a memo could compare against a company that was never fetched."""
+    analyst = FakeAnalyst([PEER_DRAFT] * 3)
+    state = run_analysis(
+        "msft", "How liquid is it?", analyst, settings, fetch=facts, runs_dir=tmp_path
+    )
+
+    assert state.memo is None
+    assert "no current_ratio for 2026 for the peer" in state.error

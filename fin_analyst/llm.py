@@ -24,6 +24,11 @@ Choose metric ids from this list, and nothing else:
 - For a question about return on equity, include its three DuPont components.
 - Return the choice with the choose_metrics tool."""
 
+NO_PEER_RULE = " State plainly that there is no peer comparison."
+PEER_RULE = """ You also have {peer}'s ratios as {{{{peer.metric_id:year}}}} placeholders;
+  compare the two at each company's own latest year end, and say that those dates differ
+  rather than implying the periods match."""
+
 WRITER_SYSTEM = """You write a short memo about {ticker} using only its latest 10-K.
 A Python program supplies every number. You never type one.
 
@@ -39,8 +44,7 @@ Rules:
 - A year->year placeholder already renders its own verb ("fell 0.12x to 1.23x"), so do
   not put "rose", "fell" or similar in front of one.
 - The values below are for your judgment only. Never repeat one as text.
-- Compare the company with its own prior year, and state plainly that there is no
-  peer comparison.
+- Compare the company with its own prior year.{peer_rule}
 - Explain only what the metrics show, such as which DuPont component moved, or
   whether liquidity sits in cash or receivables. Give no business reasons: you do
   not have the filing's text, so any reason would be invented.
@@ -91,16 +95,17 @@ def plan_tool() -> dict:
     }
 
 
-def describe_values(metrics: list[MetricResult]) -> str:
+def describe_values(metrics: list[MetricResult], prefix: str = "") -> str:
     """The values and the placeholders that exist, as the writer sees them."""
     lines = []
     for m in sorted(metrics, key=lambda m: (m.metric_id, -m.fiscal_year)):
+        name = f"{{{{{prefix}{m.metric_id}:{m.fiscal_year}}}}}"
         if m.value is None:
-            lines.append(f"- {{{{{m.metric_id}:{m.fiscal_year}}}}} = unavailable: {m.reason}")
+            lines.append(f"- {name} = unavailable: {m.reason}")
         elif m.unit == "percent":
-            lines.append(f"- {{{{{m.metric_id}:{m.fiscal_year}}}}} = {m.value * 100:.1f}%")
+            lines.append(f"- {name} = {m.value * 100:.1f}%")
         else:
-            lines.append(f"- {{{{{m.metric_id}:{m.fiscal_year}}}}} = {m.value:.2f}x")
+            lines.append(f"- {name} = {m.value:.2f}x")
 
     years = sorted({m.fiscal_year for m in metrics}, reverse=True)
     if len(years) > 1:
@@ -116,6 +121,8 @@ def writer_prompt(
     metrics: list[MetricResult],
     problems: list[str],
     history: list[tuple[str, str]] = (),
+    peer_ticker: str | None = None,
+    peer_metrics: list[MetricResult] = (),
 ) -> str:
     parts = []
     if history:
@@ -124,7 +131,14 @@ def writer_prompt(
             parts += [f"Q: {asked}", f"A: {answered}", ""]
         parts.append("Do not repeat those answers. Build on them, and answer only what is asked now.")
         parts.append("")
-    parts += [f"Question: {question}", "", "Available placeholders and their values:", describe_values(metrics)]
+    parts += [
+        f"Question: {question}",
+        "",
+        "Available placeholders and their values:",
+        describe_values(metrics),
+    ]
+    if peer_ticker:
+        parts += ["", f"{peer_ticker}, for comparison:", describe_values(peer_metrics, "peer.")]
     if problems:
         parts += [
             "",
@@ -219,11 +233,14 @@ class ClaudeAnalyst:
         metrics: list[MetricResult],
         problems: list[str],
         history: list[tuple[str, str]] = (),
+        peer_ticker: str | None = None,
+        peer_metrics: list[MetricResult] = (),
     ) -> tuple[str, float]:
+        peer_rule = PEER_RULE.format(peer=peer_ticker) if peer_ticker else NO_PEER_RULE
         response, cost = self._call(
             "write",
-            WRITER_SYSTEM.format(ticker=ticker),
-            writer_prompt(question, metrics, problems, history),
+            WRITER_SYSTEM.format(ticker=ticker, peer_rule=peer_rule),
+            writer_prompt(question, metrics, problems, history, peer_ticker, peer_metrics),
         )
         draft = "\n".join(b.text for b in response.content if b.type == "text").strip()
         if not draft:

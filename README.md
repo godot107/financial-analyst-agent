@@ -7,7 +7,7 @@ comes from the filing and none is written by the model**.
 python -m fin_analyst MSFT "How liquid is Microsoft, and what drives its return on equity?"
 ```
 
-> Iteration 1 is complete and runs end to end. 95 tests, none of which touch the network.
+> Iteration 1 complete; iteration 2 has peer comparison. 101 tests, none of which touch the network.
 
 ## How it works
 
@@ -36,6 +36,7 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | **Plan check**, 10 questions | **10/10 chose metrics that answer the question** | $0.0695 |
 | Declines what it can't answer (P/E, peer comparison) | passed | $0.0263 |
 | Two-turn conversation | second answer built on the first | $0.0574 |
+| Peer comparison (MSFT vs GOOGL) | both filings cited, year-end mismatch stated | $0.0624 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
 training, so a memo that reads well may be memory rather than retrieval. Placeholders already
@@ -63,6 +64,20 @@ Running a second and third company found two real defects, both now fixed and co
 A cosmetic one too: the writer sometimes typed "fell" in front of a placeholder that renders its
 own verb, producing "fell fell 0.12x". The renderer now drops the writer's word.
 
+The peer run then caught a false positive that was costing real money: "FY2026" failed the leak
+check, because there is no word boundary between "Y" and "2", so a perfectly legal fiscal year read
+as a typed number and burned a retry.
+
+## Comparing two companies
+
+```bash
+python -m fin_analyst MSFT "How does its liquidity compare with Alphabet's?" --peer GOOGL
+```
+
+The peer's ratios arrive as `{{peer.roe:2025}}` placeholders, computed exactly the same way. Because
+fiscal years rarely line up, each company is shown at **its own latest year end** and the memo says
+so — Microsoft's year ends in June, Alphabet's in December. Both filings are cited in the footer.
+
 ## Conversation
 
 ```bash
@@ -88,8 +103,8 @@ and token ceilings are set per node in `config.yaml`.
 
 ## Limitations
 
-- **One company, one filing.** No peer comparison, which is what makes ratios meaningful; memos say
-  so explicitly.
+- **One filing per company.** Peer comparison is one company against one other, at year ends that
+  usually differ; there is no common-period restatement.
 - **No market data,** so no P/E, EV/EBITDA or market-to-book.
 - **Banks:** liquidity ratios are correctly unavailable (no current assets), but debt to equity is
   computed from tags that miss most bank borrowing, so it understates leverage. Don't trust it.

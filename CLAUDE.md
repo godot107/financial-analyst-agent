@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete (95 tests). Live runs work; a memo costs about $0.03. Results and limitations are in the README. Iteration 2 is unstarted — see `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`). 101 tests; a memo costs about $0.03. Results and limitations are in the README; the rest of iteration 2 is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -16,6 +16,7 @@ cp .env.example .env              # ANTHROPIC_API_KEY, SEC_USER_AGENT
 pytest                            # no network, no API key needed
 python -m fin_analyst MSFT "How liquid is Microsoft?"
 python -m fin_analyst MSFT "How liquid is Microsoft?" --chat      # up to 5 follow-ups
+python -m fin_analyst MSFT "Compare with Alphabet" --peer GOOGL   # two companies
 python -m fin_analyst MSFT "..." --dry-run                        # spends nothing
 ```
 

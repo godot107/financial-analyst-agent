@@ -45,8 +45,20 @@ def test_numbers_the_model_typed_are_caught(draft):
     assert problems and "wrote yourself" in problems[0]
 
 
-def test_fiscal_years_in_the_data_are_allowed():
-    assert find_problems("Fiscal 2026 was stronger than fiscal 2025.", METRICS) == []
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "Fiscal 2026 was stronger than fiscal 2025.",
+        "FY2026 was stronger than FY2025.",  # no word boundary between Y and 2
+        "FY 2026 was stronger.",
+    ],
+)
+def test_fiscal_years_in_the_data_are_allowed(draft):
+    assert find_problems(draft, METRICS) == []
+
+
+def test_a_fiscal_year_not_in_the_data_is_still_caught():
+    assert find_problems("FY2019 was different.", METRICS)
 
 
 def test_a_year_not_in_the_data_is_still_a_leak():

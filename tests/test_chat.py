@@ -94,3 +94,21 @@ def test_a_rejected_answer_does_not_become_context(settings, facts, tmp_path):
     assert failed.memo is None
     assert chat.history == []
     assert chat.turns_left == settings.chat_max_turns
+
+
+def test_a_peer_is_fetched_once_for_the_whole_conversation(settings, facts, tmp_path):
+    fetched = []
+
+    def fetch(ticker):
+        fetched.append(ticker)
+        return facts
+
+    analyst = FakeAnalyst([CLEAN_DRAFT] * 2)
+    chat = ChatSession(
+        "msft", analyst, settings, fetch=fetch, runs_dir=tmp_path, peer_ticker="googl"
+    )
+    chat.ask("How do they compare on liquidity?")
+    chat.ask("And on leverage?")
+
+    assert fetched == ["MSFT", "GOOGL"]  # two filings, not four
+    assert [seen[0] for seen in analyst.peers_seen] == ["GOOGL", "GOOGL"]

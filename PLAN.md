@@ -383,8 +383,10 @@ before it.
 ## 6. Iteration 2 (later, only after Step 6)
 
 Pick from these based on what Iteration 1 taught:
-- Compare two companies, and handle different fiscal year-ends. Peers are what make ratios
-  meaningful (Subramanyam Ch. 1).
+- ✅ **Compare two companies** (`--peer GOOGL`). Peers are what make ratios meaningful
+  (Subramanyam Ch. 1). Built as `{{peer.metric:year}}` placeholders computed by the same registry;
+  each company is shown at its own latest year end, with the mismatch stated in the memo and both
+  accession numbers in the footer. Live MSFT vs GOOGL: $0.0624.
 - Multiple years across several filings, with restatement handling
 - Include lease liabilities in debt (Subramanyam Ch. 1), as a labelled variant
 - Cite MD&A and risk-factor passages (retrieval, reusing the textbook-kb stack), plus a
