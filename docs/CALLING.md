@@ -101,6 +101,13 @@ with its tokens, cost, stop reason and **a summary of its thinking**. Claude Opu
 raw thinking. The request asks for `display: "summarized"` (`thinking_summaries` in `config.yaml`).
 Thinking is billed in full either way, so the summary adds nothing to the cost.
 
+**Expect little thinking at these settings.** Adaptive thinking decides per call whether to think.
+In the first live run on Lambda (MSFT liquidity, 2026-09-16, $0.0453) none of the three calls did.
+Planning and verifying run at `effort: low` and writing at `medium`, and all three returned
+`thinking_blocks=0`. The writer's 619 output tokens were the draft itself. More thinking would
+cost more and take longer. For now the drafts, the checker's objections and the verifier's reasons
+explain the most.
+
 A run looks like this:
 
 ```text
