@@ -13,6 +13,7 @@ Placeholder shapes:
 import re
 
 from fin_analyst.metrics import MetricResult
+from fin_analyst.passages import Passage
 
 PLACEHOLDER = re.compile(r"\{\{(peer\.)?([a-z_]+):(\d{4})(?:->(\d{4}))?\}\}")
 # A change placeholder renders its own verb ("fell 0.12x to 1.23x"), so a verb
@@ -23,6 +24,9 @@ DOUBLED_VERB = re.compile(
     r"(\{\{(?:peer\.)?[a-z_]+:\d{4}->\d{4}\}\})",
     re.IGNORECASE,
 )
+# A citation of a filing passage, e.g. [P3]. The digits inside are an id, not a
+# figure, so they are stripped before the leak check looks for numbers.
+CITATION = re.compile(r"\[(P\d+)\]")
 # Allowed in prose despite containing digits: the form name and fiscal years,
 # which the check adds from the data it was given.
 ALWAYS_ALLOWED = {"10-K", "10-Q", "8-K"}
@@ -63,6 +67,7 @@ def find_problems(
     draft: str,
     metrics: list[MetricResult],
     peer_metrics: list[MetricResult] = (),
+    passages: list[Passage] = (),
 ) -> list[str]:
     """Everything wrong with a draft, in the words the writer needs to fix it."""
     available = {"": _results_by_key(metrics), "peer.": _results_by_key(peer_metrics)}
@@ -79,17 +84,47 @@ def find_problems(
                     f"there is no {metric_id} for {year} for {whose}"
                 )
 
-    problems.extend(_leaked_digits(draft, list(metrics) + list(peer_metrics)))
+    known = {p.id for p in passages}
+    for cited in dict.fromkeys(CITATION.findall(draft)):
+        if cited not in known:
+            problems.append(
+                f"[{cited}] is not a passage you were given; cite only the ones listed"
+            )
+
+    problems.extend(_leaked_digits(draft, list(metrics) + list(peer_metrics), passages))
     return problems
 
 
-def _leaked_digits(draft: str, metrics: list[MetricResult]) -> list[str]:
+# A name that happens to contain digits: "Microsoft 365", "Item 1A", "401k".
+# Never a measurement, which always carries a decimal point, a currency symbol
+# or a percent sign.
+NAME_LIKE = re.compile(r"^[A-Za-z]*\d+[A-Za-z]*$")
+
+
+def _is_a_name_from_the_filing(token: str, passages: list[Passage]) -> bool:
+    """True for a product or section name the filing itself uses.
+
+    "Microsoft 365" is the company's name for a product, not a figure, and
+    blocking it costs a retry for nothing. A measurement never passes this: it
+    carries a decimal, a currency symbol or a percent sign, so NAME_LIKE rejects
+    it whether or not the passage contains it.
+    """
+    word = token.strip(".,;:()[]'\"")
+    if not NAME_LIKE.match(word):
+        return False
+    return any(re.search(rf"\b{re.escape(word)}\b", p.text) for p in passages)
+
+
+def _leaked_digits(
+    draft: str, metrics: list[MetricResult], passages: list[Passage] = ()
+) -> list[str]:
     """Any digit the model typed itself.
 
-    Placeholders are removed first, then the fiscal years present in the data and
-    the form names are removed, and whatever digits remain were written by Claude.
+    Placeholders and citations are removed first, then the fiscal years present
+    in the data and the form names, and whatever digits remain were written by
+    Claude - except names the filing itself uses.
     """
-    stripped = PLACEHOLDER.sub(" ", draft)
+    stripped = CITATION.sub(" ", PLACEHOLDER.sub(" ", draft))
     for allowed in ALWAYS_ALLOWED:
         stripped = stripped.replace(allowed, " ")
     for year in {str(m.fiscal_year) for m in metrics}:
@@ -98,10 +133,14 @@ def _leaked_digits(draft: str, metrics: list[MetricResult]) -> list[str]:
         # loses a draft to a false positive.
         stripped = re.sub(rf"\bFY\s?{year}\b|\b{year}\b", " ", stripped)
 
-    leaks = re.findall(r"\S*\d[\S]*", stripped)
+    leaks = [
+        leak
+        for leak in dict.fromkeys(re.findall(r"\S*\d[\S]*", stripped))  # unique, in order
+        if not _is_a_name_from_the_filing(leak, passages)
+    ]
     return [
         f"'{leak}' is a number you wrote yourself; every number must be a placeholder"
-        for leak in dict.fromkeys(leaks)  # unique, in order
+        for leak in leaks
     ]
 
 
@@ -110,6 +149,7 @@ def render(
     metrics: list[MetricResult],
     footer: str = "",
     peer_metrics: list[MetricResult] = (),
+    passages: list[Passage] = (),
 ) -> str:
     """Swap every placeholder for its value. Assumes find_problems came back empty."""
     available = {"": _results_by_key(metrics), "peer.": _results_by_key(peer_metrics)}
@@ -122,7 +162,26 @@ def render(
         return _format_value(results[(metric_id, start_year)])
 
     memo = PLACEHOLDER.sub(replace, DOUBLED_VERB.sub(r"\1", draft))
+    sources = build_sources(memo, passages)
+    if sources:
+        memo = f"{memo.rstrip()}\n\n{sources}"
     return f"{memo.rstrip()}\n\n{footer}" if footer else memo
+
+
+def build_sources(memo: str, passages: list[Passage], quote_chars: int = 220) -> str:
+    """List every cited passage, so a reader can check the claim against the filing."""
+    by_id = {p.id: p for p in passages}
+    cited = [by_id[i] for i in dict.fromkeys(CITATION.findall(memo)) if i in by_id]
+    if not cited:
+        return ""
+
+    lines = ["**Cited from the filing**"]
+    for passage in cited:
+        quote = passage.text[:quote_chars].rstrip()
+        if len(passage.text) > quote_chars:
+            quote += "..."
+        lines.append(f'- [{passage.id}] {passage.item}, filing {passage.accession}: "{quote}"')
+    return "\n".join(lines)
 
 
 def _source_line(ticker: str, facts) -> str:

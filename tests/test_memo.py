@@ -5,6 +5,7 @@ import pytest
 from fin_analyst.edgar import Fact
 from fin_analyst.memo import build_footer, find_problems, render
 from fin_analyst.metrics import MetricResult
+from fin_analyst.passages import Passage
 
 
 def result(metric_id="current_ratio", year=2026, value=1.23, unit="ratio", reason=None):
@@ -156,3 +157,30 @@ def test_rendered_memo_keeps_the_footer_separate():
     memo = render("ROE was {{roe:2026}}.", METRICS, footer="---\nSource: test")
     assert memo.startswith("ROE was 30.2%.")
     assert memo.endswith("---\nSource: test")
+
+
+# --- names that contain digits -------------------------------------------
+
+
+def filing_passage(text):
+    return Passage(id="P1", item="Item 7", text=text, ticker="MSFT", accession="acc")
+
+
+def test_a_product_name_with_digits_is_not_a_leak():
+    """"Microsoft 365" is a name the filing uses, and blocking it costs a retry."""
+    passages = [filing_passage("Gross margin grew in Microsoft 365 Commercial cloud.")]
+    assert find_problems("Growth came from Microsoft 365 [P1].", METRICS, (), passages) == []
+
+
+@pytest.mark.parametrize("leak", ["$13.8 billion", "21%", "1.23", "66%"])
+def test_measurements_are_still_caught_even_when_the_passage_contains_them(leak):
+    """The rule admits names, never figures - a measurement carries a decimal,
+    a currency symbol or a percent sign."""
+    passages = [filing_passage(f"Gross margin increased {leak} driven by Azure.")]
+    problems = find_problems(f"Gross margin increased {leak} [P1].", METRICS, (), passages)
+    assert problems and "wrote yourself" in problems[0]
+
+
+def test_a_number_not_in_the_filing_is_still_a_leak():
+    passages = [filing_passage("Gross margin grew in Microsoft 365 Commercial cloud.")]
+    assert find_problems("There are 500 data centres.", METRICS, (), passages)

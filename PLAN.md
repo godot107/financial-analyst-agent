@@ -389,9 +389,12 @@ Pick from these based on what Iteration 1 taught:
   accession numbers in the footer. Live MSFT vs GOOGL: $0.0624.
 - Multiple years across several filings, with restatement handling
 - Include lease liabilities in debt (Subramanyam Ch. 1), as a labelled variant
-- Cite MD&A and risk-factor passages (retrieval, reusing the textbook-kb stack), plus a
-  claim-support check. That check would be an AI judge, and judges make mistakes too, so grade a
-  sample by hand (Huyen Ch. 4).
+- ✅ **Cite MD&A and risk-factor passages** (`passages.py`, a `retrieve` node). Item 7 and Item 1A
+  split into paragraphs, BM25 over exact terms, top 4 to the writer as `[P3]` citations, each cited
+  passage quoted under the memo. Numbers still come only from placeholders, and passage text is
+  marked as quoted material, not instructions (Huyen Ch. 5). `--no-text` opts out.
+  **Still to do:** the claim-support check — an AI judge, hand-graded on a sample, since judges err
+  too (Huyen Ch. 4).
 - **Recent news and commentary**, as one new `news` node between `compute` and `write`. Add the
   sources in this order:
   1. 8-K earnings press releases (Exhibit 99.1) via edgartools: free, published by the company,

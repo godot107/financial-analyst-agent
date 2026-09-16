@@ -20,6 +20,7 @@ from fin_analyst.config import Settings
 from fin_analyst.edgar import Fact, fetch_facts
 from fin_analyst.memo import build_footer, find_problems, render
 from fin_analyst.metrics import METRICS_BY_ID, MetricResult, compute_all
+from fin_analyst.passages import Passage, fetch_passages, search
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
 
@@ -37,6 +38,9 @@ class AnalysisState(BaseModel):
     peer_facts: list[Fact] = Field(default_factory=list)
     metrics: list[MetricResult] = Field(default_factory=list)  # compute
     peer_metrics: list[MetricResult] = Field(default_factory=list)
+    # retrieve: the few filing paragraphs that bear on the question, which is
+    # the only way the memo may explain *why* a number moved.
+    passages: list[Passage] = Field(default_factory=list)
     drafts: list[str] = Field(default_factory=list)  # write: every attempt, latest last
     problems: list[str] = Field(default_factory=list)  # check: latest draft's problems
     memo: str | None = None  # render
@@ -62,6 +66,7 @@ class Analyst(Protocol):
         history: list[tuple[str, str]] = (),
         peer_ticker: str | None = None,
         peer_metrics: list[MetricResult] = (),
+        passages: list[Passage] = (),
     ) -> tuple[str, float]:
         """A memo draft written in placeholders, and what the call cost."""
 
@@ -78,6 +83,8 @@ def build_graph(
     analyst: Analyst,
     settings: Settings,
     fetch: Callable[[str], list[Fact]] = fetch_facts,
+    fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
+    passages_k: int = 4,
 ):
     """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
 
@@ -115,6 +122,16 @@ def build_graph(
             "peer_metrics": compute_all(state.peer_facts, state.metric_ids),
         }
 
+    def retrieve(state: AnalysisState) -> dict:
+        """The filing's narrative, narrowed to the question.
+
+        Only the subject company: a peer's narrative would double the reading
+        for a comparison the ratios already carry.
+        """
+        if fetch_text is None:
+            return {}
+        return {"passages": search(fetch_text(state.ticker), state.question, passages_k)}
+
     def write(state: AnalysisState) -> dict:
         draft, cost = analyst.write_draft(
             state.ticker,
@@ -124,11 +141,16 @@ def build_graph(
             state.history,
             state.peer_ticker,
             state.peer_metrics,
+            state.passages,
         )
         return {"drafts": state.drafts + [draft], "cost_usd": spend(state, cost)}
 
     def check(state: AnalysisState) -> dict:
-        return {"problems": find_problems(state.drafts[-1], state.metrics, state.peer_metrics)}
+        return {
+            "problems": find_problems(
+                state.drafts[-1], state.metrics, state.peer_metrics, state.passages
+            )
+        }
 
     def after_check(state: AnalysisState) -> str:
         if not state.problems:
@@ -149,12 +171,17 @@ def build_graph(
         footer = build_footer(
             state.facts, state.metrics, state.ticker, state.peer_facts, state.peer_ticker
         )
-        return {"memo": render(state.drafts[-1], state.metrics, footer, state.peer_metrics)}
+        return {
+            "memo": render(
+                state.drafts[-1], state.metrics, footer, state.peer_metrics, state.passages
+            )
+        }
 
     graph = StateGraph(AnalysisState)
     graph.add_node("plan", plan)
     graph.add_node("fetch", fetch_node)
     graph.add_node("compute", compute)
+    graph.add_node("retrieve", retrieve)
     graph.add_node("write", write)
     graph.add_node("check", check)
     graph.add_node("gave_up", gave_up)
@@ -163,7 +190,8 @@ def build_graph(
     graph.add_edge(START, "plan")
     graph.add_edge("plan", "fetch")
     graph.add_edge("fetch", "compute")
-    graph.add_edge("compute", "write")
+    graph.add_edge("compute", "retrieve")
+    graph.add_edge("retrieve", "write")
     graph.add_edge("write", "check")
     graph.add_conditional_edges(
         "check",
@@ -182,6 +210,7 @@ def run_analysis(
     settings: Settings,
     fetch: Callable[[str], list[Fact]] = fetch_facts,
     runs_dir: Path = RUNS,
+    fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
     history: list[tuple[str, str]] = (),
     cost_so_far: float = 0.0,
     peer_ticker: str | None = None,
@@ -198,7 +227,7 @@ def run_analysis(
         history=list(history),
         cost_usd=cost_so_far,
     )
-    graph = build_graph(analyst, settings, fetch)
+    graph = build_graph(analyst, settings, fetch, fetch_text)
 
     try:
         state = AnalysisState.model_validate(graph.invoke(state))

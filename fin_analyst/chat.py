@@ -15,6 +15,7 @@ from typing import Callable
 from fin_analyst.config import Settings
 from fin_analyst.edgar import Fact, fetch_facts
 from fin_analyst.graph import RUNS, AnalysisState, Analyst, run_analysis
+from fin_analyst.passages import Passage, fetch_passages
 
 
 class ChatSession:
@@ -28,6 +29,7 @@ class ChatSession:
         fetch: Callable[[str], list[Fact]] = fetch_facts,
         runs_dir: Path = RUNS,
         peer_ticker: str | None = None,
+        fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
     ):
         self.ticker = ticker.upper()
         self.peer_ticker = peer_ticker.upper() if peer_ticker else None
@@ -38,6 +40,9 @@ class ChatSession:
         # you are asking about it.
         self.facts = fetch(self.ticker)
         self.peer_facts = fetch(self.peer_ticker) if self.peer_ticker else []
+        # The narrative is fetched once as well; each turn searches it again for
+        # the passages that bear on that question.
+        self.passages = fetch_text(self.ticker) if fetch_text else []
         self.history: list[tuple[str, str]] = []
         self.spent_usd = 0.0
 
@@ -59,6 +64,7 @@ class ChatSession:
             self.settings,
             fetch=lambda ticker: self.peer_facts if ticker == self.peer_ticker else self.facts,
             runs_dir=self.runs_dir,
+            fetch_text=(lambda ticker: self.passages) if self.passages else None,
             peer_ticker=self.peer_ticker,
             history=self.history,
             cost_so_far=self.spent_usd,

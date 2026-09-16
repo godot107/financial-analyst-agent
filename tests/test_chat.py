@@ -27,7 +27,9 @@ def session(settings, facts, tmp_path, drafts, cost=0.01):
         return facts
 
     analyst = FakeAnalyst(drafts, cost=cost)
-    chat = ChatSession("msft", analyst, settings, fetch=fetch, runs_dir=tmp_path)
+    chat = ChatSession(
+        "msft", analyst, settings, fetch=fetch, runs_dir=tmp_path, fetch_text=None
+    )
     return chat, analyst, counter
 
 
@@ -105,7 +107,8 @@ def test_a_peer_is_fetched_once_for_the_whole_conversation(settings, facts, tmp_
 
     analyst = FakeAnalyst([CLEAN_DRAFT] * 2)
     chat = ChatSession(
-        "msft", analyst, settings, fetch=fetch, runs_dir=tmp_path, peer_ticker="googl"
+        "msft", analyst, settings, fetch=fetch, runs_dir=tmp_path,
+        peer_ticker="googl", fetch_text=None,
     )
     chat.ask("How do they compare on liquidity?")
     chat.ask("And on leverage?")

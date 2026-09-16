@@ -37,6 +37,7 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | Declines what it can't answer (P/E, peer comparison) | passed | $0.0263 |
 | Two-turn conversation | second answer built on the first | $0.0574 |
 | Peer comparison (MSFT vs GOOGL) | both filings cited, year-end mismatch stated | $0.0624 |
+| MD&A citations ("why did gross margin change?") | 4 passages cited and quoted | $0.0560 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
 training, so a memo that reads well may be memory rather than retrieval. Placeholders already
@@ -64,9 +65,30 @@ Running a second and third company found two real defects, both now fixed and co
 A cosmetic one too: the writer sometimes typed "fell" in front of a placeholder that renders its
 own verb, producing "fell fell 0.12x". The renderer now drops the writer's word.
 
-The peer run then caught a false positive that was costing real money: "FY2026" failed the leak
-check, because there is no word boundary between "Y" and "2", so a perfectly legal fiscal year read
-as a typed number and burned a retry.
+Two false positives were costing real money, each burning a $0.03 retry: **"FY2026"** failed the
+leak check (there is no word boundary between "Y" and "2"), and **"Microsoft 365"** failed it too,
+because a product name with digits looked like a figure. Names the filing itself uses are now
+allowed; measurements never are, since they carry a decimal, a currency symbol or a percent sign.
+
+## Saying *why*
+
+The memo can explain a movement, but only from the filing's own words:
+
+```bash
+python -m fin_analyst MSFT "Why did Microsoft's gross margin percentage change?"
+```
+
+> Gross margin percentage decreased, driven by continued investments in AI infrastructure and a
+> sales mix shift to Azure, offset in part by efficiency gains [P30].
+
+Item 7 and Item 1A are split into paragraphs and searched with **BM25** — exact terms, no vector
+store, no embedding model. Financial questions hinge on exact words ("operating expenses",
+"ASC 842") that embeddings blur, and Huyen Ch. 6 notes term-based retrieval "works well out of the
+box". Every explanation carries a citation, each cited passage is quoted under the memo, and
+**numbers never come from the narrative** — those still come only from placeholders. Passage text
+is handed to the model as quoted material, never as instructions.
+
+`--no-text` skips it when you only want the ratios.
 
 ## Comparing two companies
 

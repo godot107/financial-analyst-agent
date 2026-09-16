@@ -12,8 +12,10 @@ import pytest
 from fin_analyst.config import load_settings
 from fin_analyst.edgar import load_facts
 from fin_analyst.graph import AnalysisState, run_analysis
+from fin_analyst.passages import load_passages, search
 
 FIXTURE = Path(__file__).parent / "fixtures" / "msft_facts.json"
+PASSAGES_FIXTURE = Path(__file__).parent / "fixtures" / "msft_passages.json"
 
 CLEAN_DRAFT = "Liquidity eased: the current ratio {{current_ratio:2025->2026}}."
 LEAKY_DRAFT = "Liquidity eased: the current ratio fell to 1.23, roughly 2x cover."
@@ -29,6 +31,7 @@ class FakeAnalyst:
         self.problems_seen = []
         self.history_seen = []
         self.peers_seen = []
+        self.passages_seen = []
 
     def choose_metrics(self, ticker, question):
         return self.metric_ids, self.cost
@@ -42,10 +45,12 @@ class FakeAnalyst:
         history=(),
         peer_ticker=None,
         peer_metrics=(),
+        passages=(),
     ):
         self.problems_seen.append(problems)
         self.history_seen.append(list(history))
         self.peers_seen.append((peer_ticker, list(peer_metrics)))
+        self.passages_seen.append(list(passages))
         return self.drafts.pop(0), self.cost
 
 
@@ -61,8 +66,13 @@ def settings():
     return load_settings()
 
 
-def run(analyst, settings, facts, tmp_path, question="How liquid is Microsoft?"):
-    return run_analysis("msft", question, analyst, settings, fetch=facts, runs_dir=tmp_path)
+def run(analyst, settings, facts, tmp_path, question="How liquid is Microsoft?", **kwargs):
+    # fetch_text=None keeps the filing's narrative out of it; these tests are
+    # about the workflow, and nothing here may touch the network.
+    kwargs.setdefault("fetch_text", None)
+    return run_analysis(
+        "msft", question, analyst, settings, fetch=facts, runs_dir=tmp_path, **kwargs
+    )
 
 
 def records_in(tmp_path):
@@ -165,7 +175,7 @@ def test_a_peer_is_fetched_computed_and_rendered(settings, facts, tmp_path):
     analyst = FakeAnalyst([PEER_DRAFT])
     state = run_analysis(
         "msft", "How does it compare?", analyst, settings,
-        fetch=fetch, runs_dir=tmp_path, peer_ticker="googl",
+        fetch=fetch, runs_dir=tmp_path, peer_ticker="googl", fetch_text=None,
     )
 
     assert fetched == ["MSFT", "GOOGL"]  # both filings, in order
@@ -181,8 +191,47 @@ def test_a_peer_placeholder_without_a_peer_is_caught(settings, facts, tmp_path):
     """Otherwise a memo could compare against a company that was never fetched."""
     analyst = FakeAnalyst([PEER_DRAFT] * 3)
     state = run_analysis(
-        "msft", "How liquid is it?", analyst, settings, fetch=facts, runs_dir=tmp_path
+        "msft", "How liquid is it?", analyst, settings, fetch=facts,
+        runs_dir=tmp_path, fetch_text=None,
     )
 
     assert state.memo is None
     assert "no current_ratio for 2026 for the peer" in state.error
+
+
+# --- citing the filing's narrative ---------------------------------------
+
+def test_passages_reach_the_writer_and_the_memo_lists_what_was_cited(
+    settings, facts, tmp_path
+):
+    """The retrieve node ranks the filing's paragraphs, so the test cites
+    whichever one the search actually returns."""
+    everything = load_passages(PASSAGES_FIXTURE)
+    question = "Why did operating expenses increase?"
+    expected = search(everything, question, 4)
+    draft = f"Costs rose [{expected[0].id}]: the ratio {{{{current_ratio:2025->2026}}}}."
+
+    analyst = FakeAnalyst([draft])
+    state = run_analysis(
+        "msft", question, analyst, settings, fetch=facts,
+        runs_dir=tmp_path, fetch_text=lambda ticker: everything,
+    )
+
+    assert [p.id for p in state.passages] == [p.id for p in expected]
+    assert analyst.passages_seen[0], "the writer was not given the passages"
+    assert f"[{expected[0].id}]" in state.memo  # the citation survives rendering
+    assert "**Cited from the filing**" in state.memo
+    assert "Item 7" in state.memo
+    # Only what was cited is listed, not everything retrieved.
+    assert state.memo.count("filing 0001193125-26-323660") == 2  # one source line, one footer
+
+
+def test_a_citation_to_a_passage_that_was_not_given_is_caught(settings, facts, tmp_path):
+    analyst = FakeAnalyst(["Margins rose [P99]."] * 3)
+    state = run_analysis(
+        "msft", "Why?", analyst, settings, fetch=facts, runs_dir=tmp_path,
+        fetch_text=lambda ticker: load_passages(PASSAGES_FIXTURE)[:2],
+    )
+
+    assert state.memo is None
+    assert "[P99] is not a passage you were given" in state.error
