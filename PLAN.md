@@ -449,6 +449,9 @@ Pick from these based on what Iteration 1 taught:
     keyword. Term-based retrieval "works well out of the box" and is cheap, while vector database
     spend can run to "one-fifth or even half" of model API spend (Huyen Ch. 6), so add embeddings
     only when BM25 falls short, reusing textbook-kb's stack.
+- ✅ **Two helpers for repetitive work:** `scripts/coverage.py` (which tags matched, what was
+  zero-filled, which ratios that costs — free to run) and `scripts/batch.py` (one question across a
+  watchlist, a memo each plus a summary, failures recorded rather than fatal, with a total spend cap).
 - A per-run trace file and more evals (a hand-checked gold set, claim grading)
 - Averages instead of ending balances; interest coverage and other solvency metrics
 - Banks and insurers (current ratio doesn't apply)

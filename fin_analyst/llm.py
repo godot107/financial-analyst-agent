@@ -55,6 +55,7 @@ Rules:
   where a verb belongs, never after "after", "when it" or another verb. To name a level
   rather than a change, use the single-year placeholder instead.
 - The values below are for your judgment only. Never repeat one as text.
+- Each metric's definition is given with it. Describe a ratio only as defined there.
 - Compare the company with its own prior year.{peer_rule}
 - {explain_rule}
 - If a metric is unavailable, say so and give the reason. Never work around it.
@@ -105,16 +106,26 @@ def plan_tool() -> dict:
 
 
 def describe_values(metrics: list[MetricResult], prefix: str = "") -> str:
-    """The values and the placeholders that exist, as the writer sees them."""
+    """The values and the placeholders that exist, as the writer sees them.
+
+    Each metric carries its definition, because a writer given only a name and a
+    number will describe the formula from habit - and say the quick ratio strips
+    out inventory, which is not how this one is built.
+    """
     lines = []
-    for m in sorted(metrics, key=lambda m: (m.metric_id, -m.fiscal_year)):
-        name = f"{{{{{prefix}{m.metric_id}:{m.fiscal_year}}}}}"
-        if m.value is None:
-            lines.append(f"- {name} = unavailable: {m.reason}")
-        elif m.unit == "percent":
-            lines.append(f"- {name} = {m.value * 100:.1f}%")
-        else:
-            lines.append(f"- {name} = {m.value:.2f}x")
+    for metric_id in sorted({m.metric_id for m in metrics}):
+        definition = METRICS_BY_ID[metric_id].description if metric_id in METRICS_BY_ID else ""
+        lines.append(f"{metric_id} - {definition}")
+        for m in sorted(
+            (m for m in metrics if m.metric_id == metric_id), key=lambda m: -m.fiscal_year
+        ):
+            name = f"{{{{{prefix}{m.metric_id}:{m.fiscal_year}}}}}"
+            if m.value is None:
+                lines.append(f"  - {name} = unavailable: {m.reason}")
+            elif m.unit == "percent":
+                lines.append(f"  - {name} = {m.value * 100:.1f}%")
+            else:
+                lines.append(f"  - {name} = {m.value:.2f}x")
 
     years = sorted({m.fiscal_year for m in metrics}, reverse=True)
     if len(years) > 1:

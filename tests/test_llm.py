@@ -143,6 +143,9 @@ def test_spending_is_counted_even_when_the_reply_is_rejected(settings):
 def test_the_writer_sees_values_and_the_placeholders_that_exist():
     prompt = writer_prompt("What drives ROE?", METRICS, problems=[])
     assert "{{roe:2026}} = 30.2%" in prompt
+    # Without the definition the writer describes ratios from habit, and called
+    # the quick ratio "current assets minus inventory", which it is not.
+    assert "roe - net income over equity" in prompt
     assert "{{debt_to_equity:2026}} = unavailable: equity is negative for 2026" in prompt
     assert "Change placeholders" in prompt
 

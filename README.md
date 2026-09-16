@@ -38,6 +38,7 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | Two-turn conversation | second answer built on the first | $0.0574 |
 | Peer comparison (MSFT vs GOOGL) | both filings cited, year-end mismatch stated | $0.0624 |
 | MD&A citations ("why did gross margin change?") | 4 passages cited and quoted | $0.0560 |
+| Batch of two (MSFT, COST) | both answered first try | $0.0615 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
 training, so a memo that reads well may be memory rather than retrieval. Placeholders already
@@ -109,6 +110,22 @@ python -m fin_analyst MSFT "How liquid is Microsoft?" --chat
 Follow-ups reuse the filing (the SEC is hit once) and see the earlier answers. Each turn resends
 those answers, so every turn costs a little more than the last — hence a hard ceiling of **5 turns**
 and a single budget shared across the whole conversation, not per turn.
+
+## Two helpers for repetitive work
+
+```bash
+python scripts/coverage.py MSFT COST JPM        # free: no model, no API key
+python scripts/batch.py "How liquid is it?" MSFT COST JPM --dry-run
+python scripts/batch.py "How liquid is it?" MSFT COST --max-usd 0.30
+```
+
+**`coverage.py`** shows which line items a filing gave up, which XBRL tag matched each one, what was
+treated as zero, and which ratios that costs. Both real defects so far were tag problems that
+surfaced only as a memo reading slightly wrong; this shows them in seconds.
+
+**`batch.py`** asks one question across a watchlist, writing a memo per company plus a summary
+table into a dated folder. A company that fails is recorded and the batch carries on, and a total
+spend cap sits above the per-memo guard. Two companies came to $0.0615.
 
 ## Setup
 
