@@ -168,6 +168,22 @@ def render(
     return f"{memo.rstrip()}\n\n{footer}" if footer else memo
 
 
+def cited_claims(draft: str, passages: list[Passage] = ()) -> list[tuple[str, list[Passage]]]:
+    """Each sentence that cites the filing, with the passages it cites.
+
+    This is what the claim check reads. Placeholders are left as they are: the
+    judge is asked whether the passage supports the claim, not whether a figure
+    is right - the figures are already guaranteed.
+    """
+    by_id = {p.id: p for p in passages}
+    claims = []
+    for sentence in re.split(r"(?<=[.!?])\s+", draft):
+        cited = [by_id[i] for i in dict.fromkeys(CITATION.findall(sentence)) if i in by_id]
+        if cited:
+            claims.append((" ".join(sentence.split()), cited))
+    return claims
+
+
 def build_sources(memo: str, passages: list[Passage], quote_chars: int = 220) -> str:
     """List every cited passage, so a reader can check the claim against the filing."""
     by_id = {p.id: p for p in passages}

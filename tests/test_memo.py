@@ -3,7 +3,7 @@
 import pytest
 
 from fin_analyst.edgar import Fact
-from fin_analyst.memo import build_footer, find_problems, render
+from fin_analyst.memo import build_footer, cited_claims, find_problems, render
 from fin_analyst.metrics import MetricResult
 from fin_analyst.passages import Passage
 
@@ -184,3 +184,30 @@ def test_measurements_are_still_caught_even_when_the_passage_contains_them(leak)
 def test_a_number_not_in_the_filing_is_still_a_leak():
     passages = [filing_passage("Gross margin grew in Microsoft 365 Commercial cloud.")]
     assert find_problems("There are 500 data centres.", METRICS, (), passages)
+
+
+# --- what the claim check reads ------------------------------------------
+
+
+def test_only_sentences_that_cite_the_filing_are_checked():
+    passages = [filing_passage("Azure grew."), Passage(id="P2", item="Item 1A", text="Risk.", ticker="MSFT", accession="acc")]
+    draft = (
+        "Margins fell {{net_margin:2025->2026}}. "
+        "The filing attributes this to Azure investment [P1]. "
+        "Liquidity is unrelated. "
+        "Two passages agree [P1][P2]."
+    )
+    claims = cited_claims(draft, passages)
+
+    assert len(claims) == 2  # the uncited sentences are not the judge's business
+    assert claims[0][0].endswith("[P1].")
+    assert [p.id for p in claims[1][1]] == ["P1", "P2"]
+
+
+def test_a_citation_nobody_gave_us_is_not_sent_to_the_judge():
+    """The checker already rejects it; the judge should never see a dangling id."""
+    assert cited_claims("Claimed [P99].", [filing_passage("text")]) == []
+
+
+def test_a_draft_with_no_citations_needs_no_checking():
+    assert cited_claims("Margins fell {{net_margin:2025->2026}}.", [filing_passage("t")]) == []

@@ -12,6 +12,10 @@ nodes:
     model: claude-opus-5
     effort: medium
     max_tokens: 1500 # the memo is ~250 words; this is a ceiling, not a target
+  verify:
+    model: claude-opus-5
+    effort: low # judging support against a quoted passage is a reading task
+    max_tokens: 1024
 
 # USD per million tokens. Check https://platform.claude.com/docs/en/pricing
 # before changing, and add a row before pointing a node at a new model.

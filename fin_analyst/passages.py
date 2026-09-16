@@ -79,20 +79,72 @@ def fetch_passages(ticker: str, identity: str | None = None) -> list[Passage]:
     return passages
 
 
-def tokenize(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9']+", text.lower())
+# Question words carry no signal and crowd the scoring.
+STOPWORDS = {"why", "did", "does", "do", "what", "how", "is", "are", "the", "a", "an", "of",
+             "in", "on", "for", "to", "and", "or", "its", "it", "this", "that", "was", "were"}
+# How much a matched phrase lifts a passage, as a fraction of its own score.
+PHRASE_WEIGHT = 1.0
+
+
+def stem(word: str) -> str:
+    """Enough stemming to match "increase" with "increased".
+
+    Without it, a question asking why expenses *increase* misses the paragraph
+    saying they *increased*, and a paragraph that merely repeats "expenses"
+    outranks the one that explains them.
+    """
+    word = word.removesuffix("'s")
+    for suffix, keep in (("ing", 5), ("ed", 4), ("es", 4), ("s", 3), ("e", 4)):
+        if word.endswith(suffix) and len(word) > keep:
+            return word[: -len(suffix)]
+    return word
+
+
+def tokenize(text: str, drop_stopwords: bool = False) -> list[str]:
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    if drop_stopwords:
+        words = [w for w in words if w not in STOPWORDS]
+    return [stem(w) for w in words]
+
+
+def _phrase_bonus(query_tokens: list[str], passage_tokens: list[str]) -> float:
+    """The share of the question's word pairs that appear in the passage.
+
+    "operating expenses" as a phrase means far more than the two words apart,
+    and finance questions are full of such pairs: gross margin, deferred revenue.
+    """
+    pairs = list(zip(query_tokens, query_tokens[1:]))
+    if not pairs:
+        return 0.0
+    passage_pairs = set(zip(passage_tokens, passage_tokens[1:]))
+    return sum(pair in passage_pairs for pair in pairs) / len(pairs)
 
 
 def search(passages: list[Passage], query: str, k: int = 4) -> list[Passage]:
     """The k passages that best match the question, best first."""
     if not passages:
         return []
-    index = BM25Okapi([tokenize(p.text) for p in passages])
-    scores = index.get_scores(tokenize(query))
-    ranked = sorted(zip(scores, passages), key=lambda pair: -pair[0])
-    # A zero score means the question shares no terms with the passage; a
-    # citation to it would be decoration, not evidence.
-    return [passage for score, passage in ranked[:k] if score > 0]
+    documents = [tokenize(p.text) for p in passages]
+    index = BM25Okapi(documents)
+    query_tokens = tokenize(query, drop_stopwords=True)
+    if not query_tokens:
+        return []
+
+    scores = index.get_scores(query_tokens)
+    wanted = set(query_tokens)
+
+    # Sharing no words with the question is the real exclusion rule. Don't test
+    # the score for that: with few passages BM25 gives common terms a negative
+    # weight, and a sign test then throws away every result.
+    candidates = [
+        (_phrase_bonus(query_tokens, document), score, passage)
+        for document, score, passage in zip(documents, scores, passages)
+        if wanted & set(document)
+    ]
+    # A passage containing the question's own phrase ("operating expenses")
+    # ranks above one that merely scatters those words; BM25 breaks the ties.
+    candidates.sort(key=lambda row: (-row[0], -row[1]))
+    return [passage for _, _, passage in candidates[:k]]
 
 
 def save_passages(passages: list[Passage], path: Path) -> None:

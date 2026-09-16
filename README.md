@@ -39,6 +39,8 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | Peer comparison (MSFT vs GOOGL) | both filings cited, year-end mismatch stated | $0.0624 |
 | MD&A citations ("why did gross margin change?") | 4 passages cited and quoted | $0.0560 |
 | Batch of two (MSFT, COST) | both answered first try | $0.0615 |
+| Memo with citations + claim check | 1 draft, 3 claims checked, all supported | $0.0429 |
+| **Claim-check grading**, 8 hand-labelled cases | **8/8 agreed** | $0.0167 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
 training, so a memo that reads well may be memory rather than retrieval. Placeholders already
@@ -50,7 +52,13 @@ the altered data.
 ```bash
 python evals/trend_flip.py    # ~$0.03
 python evals/plan_check.py    # ~$0.07
+python evals/claim_check.py   # ~$0.02
 ```
+
+**The claim checker is itself graded**, because AI judges err too (Huyen Ch. 4). Eight claims are
+paired with real passages and labelled by hand, and the hard cases are not opposites but claims
+that are plausible, probably true, and simply absent from the passage. The judge got all eight,
+including "AI talent was the single largest driver", which the passage never ranks.
 
 ## What the checks caught
 
@@ -65,6 +73,13 @@ Running a second and third company found two real defects, both now fixed and co
 
 A cosmetic one too: the writer sometimes typed "fell" in front of a placeholder that renders its
 own verb, producing "fell fell 0.12x". The renderer now drops the writer's word.
+
+The claim-check eval then exposed a **retrieval** bug rather than a judging one. Asked why operating
+expenses rose, BM25 ranked a paragraph about currency effects above the paragraph that answers it:
+the currency text repeats "expenses", while the question's "increase" never matched the filing's
+"increased". Light stemming and credit for matching phrases fixed the ranking. A test of that fix
+then found a second bug: with few passages BM25 gives common terms negative weight, so filtering on
+a positive score silently returned nothing at all.
 
 Two false positives were costing real money, each burning a $0.03 retry: **"FY2026"** failed the
 leak check (there is no word boundary between "Y" and "2"), and **"Microsoft 365"** failed it too,
@@ -81,6 +96,11 @@ python -m fin_analyst MSFT "Why did Microsoft's gross margin percentage change?"
 
 > Gross margin percentage decreased, driven by continued investments in AI infrastructure and a
 > sales mix shift to Azure, offset in part by efficiency gains [P30].
+
+Every explanation is then **checked by a second Claude call**: is this claim actually in the passage
+it cites? An unsupported claim goes back to the writer as a problem, like a leaked number, and a
+memo whose claims never hold up publishes nothing. Every verdict — not only the failures — is saved
+in the run record. `--no-verify` skips it.
 
 Item 7 and Item 1A are split into paragraphs and searched with **BM25** — exact terms, no vector
 store, no embedding model. Financial questions hinge on exact words ("operating expenses",

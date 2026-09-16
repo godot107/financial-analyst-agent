@@ -21,10 +21,16 @@ CLEAN_DRAFT = "Liquidity eased: the current ratio {{current_ratio:2025->2026}}."
 LEAKY_DRAFT = "Liquidity eased: the current ratio fell to 1.23, roughly 2x cover."
 
 
+class FakeVerdict:
+    def __init__(self, supported, reason="because the passage says so"):
+        self.supported = supported
+        self.reason = reason
+
+
 class FakeAnalyst:
     """Returns scripted drafts and remembers what it was asked."""
 
-    def __init__(self, drafts, metric_ids=("current_ratio",), cost=0.01):
+    def __init__(self, drafts, metric_ids=("current_ratio",), cost=0.01, verdicts=None):
         self.drafts = list(drafts)
         self.metric_ids = list(metric_ids)
         self.cost = cost
@@ -32,9 +38,18 @@ class FakeAnalyst:
         self.history_seen = []
         self.peers_seen = []
         self.passages_seen = []
+        # One list of verdicts per verify call; the default supports everything.
+        self.verdicts = list(verdicts) if verdicts else None
+        self.claims_seen = []
 
     def choose_metrics(self, ticker, question):
         return self.metric_ids, self.cost
+
+    def verify_claims(self, claims):
+        self.claims_seen.append(list(claims))
+        if self.verdicts:
+            return self.verdicts.pop(0), self.cost
+        return [FakeVerdict(True) for _ in claims], self.cost
 
     def write_draft(
         self,
@@ -235,3 +250,84 @@ def test_a_citation_to_a_passage_that_was_not_given_is_caught(settings, facts, t
 
     assert state.memo is None
     assert "[P99] is not a passage you were given" in state.error
+
+
+def citing_run(settings, facts, tmp_path, drafts, verdicts=None, **kwargs):
+    """A run with the filing's narrative, so the verify node has something to do."""
+    everything = load_passages(PASSAGES_FIXTURE)
+    analyst = FakeAnalyst(drafts, verdicts=verdicts)
+    state = run_analysis(
+        "msft", "Why did operating expenses increase?", analyst, settings, fetch=facts,
+        runs_dir=tmp_path, fetch_text=lambda ticker: everything, **kwargs
+    )
+    return state, analyst
+
+
+def cited_id(question="Why did operating expenses increase?"):
+    return search(load_passages(PASSAGES_FIXTURE), question, 4)[0].id
+
+
+def test_a_supported_claim_reaches_the_memo(settings, facts, tmp_path):
+    draft = f"Costs rose on AI investment [{cited_id()}]."
+    state, analyst = citing_run(settings, facts, tmp_path, [draft])
+
+    assert state.memo and state.error is None
+    assert len(analyst.claims_seen[0]) == 1  # the judge saw the one cited sentence
+    assert state.cost_usd == pytest.approx(0.03)  # plan + write + verify
+
+
+def test_an_unsupported_claim_is_sent_back_to_the_writer(settings, facts, tmp_path):
+    bad = f"Costs rose because the CEO said so [{cited_id()}]."
+    good = f"Costs rose on AI investment [{cited_id()}]."
+    state, analyst = citing_run(
+        settings, facts, tmp_path, [bad, good],
+        verdicts=[[FakeVerdict(False, "the passage does not mention the CEO")]],
+    )
+
+    assert state.memo is not None
+    assert len(state.drafts) == 2
+    problems = analyst.problems_seen[1]
+    assert "not supported by the passage it cites" in problems[0]
+    assert "does not mention the CEO" in problems[0]
+
+
+def test_claims_that_stay_unsupported_publish_nothing(settings, facts, tmp_path):
+    bad = f"Costs rose because the CEO said so [{cited_id()}]."
+    state, _ = citing_run(
+        settings, facts, tmp_path, [bad] * 3,
+        verdicts=[[FakeVerdict(False, "not in the passage")] for _ in range(3)],
+    )
+
+    assert state.memo is None
+    assert "gave up after 3 drafts" in state.error
+    assert "not supported" in state.error
+
+
+def test_the_judge_is_skipped_when_nothing_is_cited(settings, facts, tmp_path):
+    state, analyst = citing_run(settings, facts, tmp_path, [CLEAN_DRAFT])
+
+    assert state.memo is not None
+    assert analyst.claims_seen == [], "no citations, so nothing to check"
+    assert state.cost_usd == pytest.approx(0.02)  # plan + write only
+
+
+def test_verification_can_be_turned_off(settings, facts, tmp_path):
+    draft = f"Costs rose on AI investment [{cited_id()}]."
+    state, analyst = citing_run(settings, facts, tmp_path, [draft], verify=False)
+
+    assert state.memo is not None
+    assert analyst.claims_seen == []
+
+
+def test_the_record_keeps_every_verdict_not_just_the_failures(settings, facts, tmp_path):
+    """The record is the audit trail: what was checked matters as much as what failed."""
+    draft = f"Costs rose on AI investment [{cited_id()}]."
+    state, _ = citing_run(settings, facts, tmp_path, [draft])
+
+    assert len(state.claim_checks) == 1
+    check = state.claim_checks[0]
+    assert check.supported and check.cited == [cited_id()]
+    assert check.claim.endswith("].")
+
+    record = json.loads(sorted(tmp_path.glob("*.json"))[0].read_text())
+    assert record["claim_checks"][0]["supported"] is True

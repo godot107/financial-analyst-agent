@@ -1,9 +1,12 @@
 """Step 4: the workflow.
 
-    START → plan → fetch → compute → write → check ──ok──→ render → END
-                                       ▲        │
-                                       └─retry──┤
-                                                └──gave up──→ END (no memo)
+    START → plan → fetch → compute → retrieve → write → check → verify ──ok──→ render → END
+                                                   ▲          │        │
+                                                   └──retry───┴────────┘
+                                                              └──gave up──→ END (no memo)
+
+`check` is deterministic: leaked numbers, unknown placeholders, dangling citations.
+`verify` asks Claude whether each cited claim is actually in the passage it cites.
 
 Claude appears twice, behind the `Analyst` interface below, so tests can run the
 whole graph with a scripted stand-in and no API key. Everything else is Python.
@@ -18,11 +21,20 @@ from pydantic import BaseModel, Field
 
 from fin_analyst.config import Settings
 from fin_analyst.edgar import Fact, fetch_facts
-from fin_analyst.memo import build_footer, find_problems, render
+from fin_analyst.memo import build_footer, cited_claims, find_problems, render
 from fin_analyst.metrics import METRICS_BY_ID, MetricResult, compute_all
 from fin_analyst.passages import Passage, fetch_passages, search
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
+
+
+class ClaimCheck(BaseModel):
+    """What the judge said about one cited claim, kept for the record."""
+
+    claim: str
+    cited: list[str]
+    supported: bool
+    reason: str
 
 
 class AnalysisState(BaseModel):
@@ -41,6 +53,9 @@ class AnalysisState(BaseModel):
     # retrieve: the few filing paragraphs that bear on the question, which is
     # the only way the memo may explain *why* a number moved.
     passages: list[Passage] = Field(default_factory=list)
+    # verify: every verdict, not only the failures, so the run record shows what
+    # was checked as well as what was rejected.
+    claim_checks: list[ClaimCheck] = Field(default_factory=list)
     drafts: list[str] = Field(default_factory=list)  # write: every attempt, latest last
     problems: list[str] = Field(default_factory=list)  # check: latest draft's problems
     memo: str | None = None  # render
@@ -56,6 +71,9 @@ class Analyst(Protocol):
 
     def choose_metrics(self, ticker: str, question: str) -> tuple[list[str], float]:
         """Metric ids to compute, and what the call cost."""
+
+    def verify_claims(self, claims) -> tuple[list, float]:
+        """One verdict per cited claim: is the passage it cites behind it?"""
 
     def write_draft(
         self,
@@ -85,6 +103,7 @@ def build_graph(
     fetch: Callable[[str], list[Fact]] = fetch_facts,
     fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
     passages_k: int = 4,
+    verify: bool = True,
 ):
     """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
 
@@ -152,12 +171,46 @@ def build_graph(
             )
         }
 
+    def verify_node(state: AnalysisState) -> dict:
+        """Ask Claude whether each cited claim is really in the passage it cites.
+
+        The checker before this proves the citation exists; this asks whether it
+        holds the claim up. An unsupported claim is handled like any other
+        problem: the writer is told, and rewrites.
+        """
+        claims = cited_claims(state.drafts[-1], state.passages)
+        verdicts, cost = analyst.verify_claims(claims)
+
+        checks = [
+            ClaimCheck(
+                claim=claim,
+                cited=[p.id for p in passages],
+                supported=verdict.supported,
+                reason=verdict.reason,
+            )
+            for (claim, passages), verdict in zip(claims, verdicts)
+        ]
+        problems = [
+            f'this claim is not supported by the passage it cites: "{check.claim}" - {check.reason}'
+            for check in checks
+            if not check.supported
+        ]
+        return {
+            "claim_checks": state.claim_checks + checks,
+            "problems": problems,
+            "cost_usd": spend(state, cost),
+        }
+
     def after_check(state: AnalysisState) -> str:
+        if state.problems:
+            return "write" if len(state.drafts) <= settings.max_retries else "gave_up"
+        # Nothing wrong with the mechanics; now ask whether the citations hold.
+        return "verify" if verify and cited_claims(state.drafts[-1], state.passages) else "render"
+
+    def after_verify(state: AnalysisState) -> str:
         if not state.problems:
             return "render"
-        if len(state.drafts) > settings.max_retries:
-            return "gave_up"
-        return "write"
+        return "write" if len(state.drafts) <= settings.max_retries else "gave_up"
 
     def gave_up(state: AnalysisState) -> dict:
         return {
@@ -184,6 +237,7 @@ def build_graph(
     graph.add_node("retrieve", retrieve)
     graph.add_node("write", write)
     graph.add_node("check", check)
+    graph.add_node("verify", verify_node)
     graph.add_node("gave_up", gave_up)
     graph.add_node("render", render_node)
 
@@ -196,6 +250,11 @@ def build_graph(
     graph.add_conditional_edges(
         "check",
         after_check,
+        {"render": "render", "write": "write", "verify": "verify", "gave_up": "gave_up"},
+    )
+    graph.add_conditional_edges(
+        "verify",
+        after_verify,
         {"render": "render", "write": "write", "gave_up": "gave_up"},
     )
     graph.add_edge("render", END)
@@ -214,6 +273,7 @@ def run_analysis(
     history: list[tuple[str, str]] = (),
     cost_so_far: float = 0.0,
     peer_ticker: str | None = None,
+    verify: bool = True,
 ) -> AnalysisState:
     """Run the workflow and save what happened, memo or no memo.
 
@@ -227,7 +287,7 @@ def run_analysis(
         history=list(history),
         cost_usd=cost_so_far,
     )
-    graph = build_graph(analyst, settings, fetch, fetch_text)
+    graph = build_graph(analyst, settings, fetch, fetch_text, verify=verify)
 
     try:
         state = AnalysisState.model_validate(graph.invoke(state))

@@ -393,8 +393,9 @@ Pick from these based on what Iteration 1 taught:
   split into paragraphs, BM25 over exact terms, top 4 to the writer as `[P3]` citations, each cited
   passage quoted under the memo. Numbers still come only from placeholders, and passage text is
   marked as quoted material, not instructions (Huyen Ch. 5). `--no-text` opts out.
-  **Still to do:** the claim-support check — an AI judge, hand-graded on a sample, since judges err
-  too (Huyen Ch. 4).
+  ✅ **The claim-support check** is built too: a `verify` node asks Claude whether each cited claim
+  is in the passage it cites, unsupported claims go back to the writer as problems, and every
+  verdict is kept in the run record. Graded 8/8 against hand labels (`evals/claim_check.py`).
 - **Recent news and commentary**, as one new `news` node between `compute` and `write`. Add the
   sources in this order:
   1. 8-K earnings press releases (Exhibit 99.1) via edgartools: free, published by the company,

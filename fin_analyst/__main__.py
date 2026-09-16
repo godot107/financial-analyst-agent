@@ -27,6 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="skip the filing's narrative: faster and cheaper, but the memo cannot say why",
     )
     parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="skip the claim check: cheaper, but nobody checks the citations hold",
+    )
+    parser.add_argument(
         "--chat",
         action="store_true",
         help="keep asking follow-ups about the same company (a few turns, one shared budget)",
@@ -79,7 +84,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text)
 
     state = run_analysis(
-        ticker, args.question, analyst, settings, peer_ticker=args.peer, fetch_text=fetch_text
+        ticker, args.question, analyst, settings, peer_ticker=args.peer,
+        fetch_text=fetch_text, verify=not args.no_verify,
     )
     show(state, analyst)
     return 0 if state.memo else 1
