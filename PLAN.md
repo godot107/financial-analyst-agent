@@ -168,7 +168,7 @@ sheet has 2, so ROE covers 3 years but the equity multiplier covers 2.
 - current assets ≤ total assets
 - every fact has an accession number
 
-### Step 2 — Metrics (`metrics.py`)
+### Step 2 — Metrics (`metrics.py`) ✅
 Nine metrics, using **ending** balances. This is simpler, B&D eq. 2.20 does the same, and its
 footnote allows averages as the alternative. State it in the memo footer.
 
@@ -197,6 +197,10 @@ Definition notes:
 
 Each metric is a small function plus a one-line description. The description is what `plan` shows
 Claude.
+
+**As built:** a year is only reported when the metric's denominator exists in the filing, so no
+2024 current ratio is invented; ROE still covers 3 years because equity does. A company with no
+debt lines at all gives "no debt lines", which is different from reported zeros.
 
 **Done when:** tests pass for:
 - values checked by hand against the MSFT 10-K
