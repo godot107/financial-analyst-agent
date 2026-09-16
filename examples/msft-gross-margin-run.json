@@ -1,0 +1,184 @@
+{
+  "ticker": "MSFT",
+  "question": "Why did Microsoft's gross margin percentage change, and what does the filing say about it?",
+  "peer_ticker": null,
+  "metric_ids": [
+    "gross_margin",
+    "net_margin"
+  ],
+  "metrics": [
+    {
+      "metric_id": "gross_margin",
+      "fiscal_year": 2026,
+      "value": 0.6794409337058032,
+      "unit": "percent",
+      "reason": null,
+      "inputs": {
+        "gross_profit": 225465000000.0,
+        "revenue": 331839000000.0
+      }
+    },
+    {
+      "metric_id": "gross_margin",
+      "fiscal_year": 2025,
+      "value": 0.6882374238616519,
+      "unit": "percent",
+      "reason": null,
+      "inputs": {
+        "gross_profit": 193893000000.0,
+        "revenue": 281724000000.0
+      }
+    },
+    {
+      "metric_id": "gross_margin",
+      "fiscal_year": 2024,
+      "value": 0.6976444382797138,
+      "unit": "percent",
+      "reason": null,
+      "inputs": {
+        "gross_profit": 171008000000.0,
+        "revenue": 245122000000.0
+      }
+    },
+    {
+      "metric_id": "net_margin",
+      "fiscal_year": 2026,
+      "value": 0.4030538905915218,
+      "unit": "percent",
+      "reason": null,
+      "inputs": {
+        "net_income": 133749000000.0,
+        "revenue": 331839000000.0
+      }
+    },
+    {
+      "metric_id": "net_margin",
+      "fiscal_year": 2025,
+      "value": 0.3614601524896707,
+      "unit": "percent",
+      "reason": null,
+      "inputs": {
+        "net_income": 101832000000.0,
+        "revenue": 281724000000.0
+      }
+    },
+    {
+      "metric_id": "net_margin",
+      "fiscal_year": 2024,
+      "value": 0.35955972944084985,
+      "unit": "percent",
+      "reason": null,
+      "inputs": {
+        "net_income": 88136000000.0,
+        "revenue": 245122000000.0
+      }
+    }
+  ],
+  "peer_metrics": [],
+  "passages": [
+    {
+      "id": "P27",
+      "item": "Item 7",
+      "text": "•Gross margin increased $16.6 billion or 17% driven by growth in Microsoft 365 Commercial cloud. Gross margin percentage increased slightly primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset in part by continued investments in AI infrastructure and growing AI product usage.",
+      "ticker": "MSFT",
+      "accession": "0001193125-26-323660"
+    },
+    {
+      "id": "P22",
+      "item": "Item 7",
+      "text": "•Microsoft Cloud gross margin percentage decreased to 66% driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud.",
+      "ticker": "MSFT",
+      "accession": "0001193125-26-323660"
+    },
+    {
+      "id": "P30",
+      "item": "Item 7",
+      "text": "•Gross margin increased $13.8 billion or 21% driven by growth in Azure. Gross margin percentage decreased driven by the continued investments in AI infrastructure as well as sales mix shift to Azure, offset in part by efficiency gains in Azure.",
+      "ticker": "MSFT",
+      "accession": "0001193125-26-323660"
+    },
+    {
+      "id": "P150",
+      "item": "Item 1A",
+      "text": "We earn a significant amount of our operating income outside the U.S. A change in the mix of earnings and losses in countries with differing statutory tax rates, changes in our business or structure, or the expiration of or disputes about certain tax agreements in a particular country may result in higher effective tax rates for the company. In addition, changes in U.S. federal and state or international tax laws applicable to corporate multinationals, other global fundamental law changes currently being considered by many countries, including in the U.S., and changes in taxing jurisdictions’ administrative interpretations, decisions, policies, and positions could adversely affect our financial condition and results of operations.",
+      "ticker": "MSFT",
+      "accession": "0001193125-26-323660"
+    }
+  ],
+  "claim_checks": [
+    {
+      "claim": "**Memo — MSFT gross margin, latest 10-K** **Answer in one line:** Gross margin percentage declined again this year, and the filing attributes the pressure to AI infrastructure investment and sales mix, partly offset by cloud efficiency gains [P30][P22].",
+      "cited": [
+        "P30",
+        "P22"
+      ],
+      "supported": false,
+      "reason": "Passages state gross margin percentage decreased, but neither says it declined 'again this year' (no prior-year decline mentioned); the 'declined again' framing is unsupported."
+    },
+    {
+      "claim": "In one discussion, gross margin percentage \"decreased driven by the continued investments in AI infrastructure as well as sales mix shift to Azure, offset in part by efficiency gains in Azure\" [P30].",
+      "cited": [
+        "P30"
+      ],
+      "supported": true,
+      "reason": "Direct quote from P30."
+    },
+    {
+      "claim": "The Microsoft Cloud gross margin percentage likewise \"decreased driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud\" [P22].",
+      "cited": [
+        "P22"
+      ],
+      "supported": true,
+      "reason": "Direct quote from P22."
+    },
+    {
+      "claim": "Elsewhere the filing describes gross margin percentage as having \"increased slightly primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset in part by continued investments in AI infrastructure and growing AI product usage\" [P27] — a different comparison period or grouping.",
+      "cited": [
+        "P27"
+      ],
+      "supported": true,
+      "reason": "Direct quote from P27, which indeed differs from the other segment/period discussion."
+    },
+    {
+      "claim": "**Memo — MSFT gross margin percentage, latest 10-K** **Answer in one line:** Gross margin percentage {{gross_margin:2025->2026}}, and the filing points to AI infrastructure investment and sales mix, partly offset by cloud efficiency gains [P30].",
+      "cited": [
+        "P30"
+      ],
+      "supported": true,
+      "reason": "Passage cites AI infrastructure investment and sales mix shift, offset by Azure efficiency gains."
+    },
+    {
+      "claim": "**What the filing says.** One passage states that gross margin percentage decreased, driven by continued investments in AI infrastructure and a sales mix shift to Azure, offset in part by efficiency gains in Azure [P30].",
+      "cited": [
+        "P30"
+      ],
+      "supported": true,
+      "reason": "Directly restates the passage."
+    },
+    {
+      "claim": "Consistent with that, Microsoft Cloud gross margin percentage is described as decreasing, driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud [P22].",
+      "cited": [
+        "P22"
+      ],
+      "supported": true,
+      "reason": "Matches passage wording."
+    },
+    {
+      "claim": "A separate passage describes gross margin percentage increasing slightly, primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset in part by continued investments in AI infrastructure and growing AI product usage [P27].",
+      "cited": [
+        "P27"
+      ],
+      "supported": true,
+      "reason": "Matches passage wording."
+    }
+  ],
+  "drafts": [
+    "**Memo — MSFT gross margin, latest 10-K**\n\n**Answer in one line:** Gross margin percentage declined again this year, and the filing attributes the pressure to AI infrastructure investment and sales mix, partly offset by cloud efficiency gains [P30][P22].\n\n**The move**\n\nGross margin, defined as gross profit over revenue, {{gross_margin:2024->2025}} and then {{gross_margin:2025->2026}}. That is a second consecutive step down from {{gross_margin:2024}} in fiscal 2024, so the direction is consistent rather than a one-year anomaly.\n\n**What the filing says**\n\nThe filing's own explanation runs in two directions. In one discussion, gross margin percentage \"decreased driven by the continued investments in AI infrastructure as well as sales mix shift to Azure, offset in part by efficiency gains in Azure\" [P30]. The Microsoft Cloud gross margin percentage likewise \"decreased driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud\" [P22]. Elsewhere the filing describes gross margin percentage as having \"increased slightly primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset in part by continued investments in AI infrastructure and growing AI product usage\" [P27] — a different comparison period or grouping. Beyond these statements, the filing does not explain the consolidated decline here.\n\n**Context**\n\nNotably, the squeeze is confined to the cost-of-sales line: net margin, net income over revenue, {{net_margin:2025->2026}}, having been {{net_margin:2024}} in fiscal 2024. The passages provided do not explain that divergence, so I will not speculate.\n\n**Limits**\n\nNo peer or industry comparison is possible from this data — only Microsoft against its own prior years. No valuation multiples are available either.",
+    "**Memo — MSFT gross margin percentage, latest 10-K**\n\n**Answer in one line:** Gross margin percentage {{gross_margin:2025->2026}}, and the filing points to AI infrastructure investment and sales mix, partly offset by cloud efficiency gains [P30].\n\n**The level and the move.** Company gross margin — gross profit over revenue — stands at {{gross_margin:2026}} in fiscal 2026, against {{gross_margin:2025}} in fiscal 2025 and {{gross_margin:2024}} in fiscal 2024. Measured from fiscal 2024, the margin {{gross_margin:2024->2026}}. This is a comparison of Microsoft with its own prior years only; the data here contains no peer figures, so no competitor or industry benchmarking is possible, and no valuation multiple can be derived.\n\n**What the filing says.** One passage states that gross margin percentage decreased, driven by continued investments in AI infrastructure and a sales mix shift to Azure, offset in part by efficiency gains in Azure [P30]. Consistent with that, Microsoft Cloud gross margin percentage is described as decreasing, driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud [P22]. A separate passage describes gross margin percentage increasing slightly, primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset in part by continued investments in AI infrastructure and growing AI product usage [P27]. The passages supplied do not identify which period each of these discussions covers, so the filing as excerpted here does not fully reconcile them.\n\n**Below the gross line.** Net margin — net income over revenue — {{net_margin:2025->2026}}, moving opposite to gross margin. The passages provided do not explain that divergence, so no cause is offered here."
+  ],
+  "problems": [],
+  "memo": "**Memo — MSFT gross margin percentage, latest 10-K**\n\n**Answer in one line:** Gross margin percentage fell 0.9 pts to 67.9%, and the filing points to AI infrastructure investment and sales mix, partly offset by cloud efficiency gains [P30].\n\n**The level and the move.** Company gross margin — gross profit over revenue — stands at 67.9% in fiscal 2026, against 68.8% in fiscal 2025 and 69.8% in fiscal 2024. Measured from fiscal 2024, the margin fell 1.8 pts to 67.9%. This is a comparison of Microsoft with its own prior years only; the data here contains no peer figures, so no competitor or industry benchmarking is possible, and no valuation multiple can be derived.\n\n**What the filing says.** One passage states that gross margin percentage decreased, driven by continued investments in AI infrastructure and a sales mix shift to Azure, offset in part by efficiency gains in Azure [P30]. Consistent with that, Microsoft Cloud gross margin percentage is described as decreasing, driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud [P22]. A separate passage describes gross margin percentage increasing slightly, primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset in part by continued investments in AI infrastructure and growing AI product usage [P27]. The passages supplied do not identify which period each of these discussions covers, so the filing as excerpted here does not fully reconcile them.\n\n**Below the gross line.** Net margin — net income over revenue — rose 4.2 pts to 40.3%, moving opposite to gross margin. The passages provided do not explain that divergence, so no cause is offered here.\n\n**Cited from the filing**\n- [P30] Item 7, filing 0001193125-26-323660: \"•Gross margin increased $13.8 billion or 21% driven by growth in Azure. Gross margin percentage decreased driven by the continued investments in AI infrastructure as well as sales mix shift to Azure, offset in part by ef...\"\n- [P22] Item 7, filing 0001193125-26-323660: \"•Microsoft Cloud gross margin percentage decreased to 66% driven by continued investments in AI infrastructure and growing AI product usage, offset in part by efficiency gains in Azure and Microsoft 365 Commercial cloud.\"\n- [P27] Item 7, filing 0001193125-26-323660: \"•Gross margin increased $16.6 billion or 17% driven by growth in Microsoft 365 Commercial cloud. Gross margin percentage increased slightly primarily driven by efficiency gains in Microsoft 365 Commercial cloud, offset i...\"\n\n---\nMSFT: SEC filing 0001193125-26-323660; balance sheet dates 2026-06-30, 2025-06-30.\nRatios use ending balances, not averages. Debt excludes lease liabilities.\nNo peer comparison: this memo covers one company against its own prior years.\nMSFT does not report, so treated as zero: short_term_borrowings.",
+  "history": [],
+  "cost_usd": 0.08628500000000001,
+  "error": null
+}

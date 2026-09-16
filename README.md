@@ -1,13 +1,20 @@
 # Agentic Financial Analyst
 
-Ask a question about a company, get a short memo built from its latest 10-K, where **every number
-comes from the filing and none is written by the model**.
+Ask a question about a public company, get a short memo built from its latest 10-K, where **every
+number comes from the filing and none is written by the model**.
+
+[Quick start](QUICKSTART.md) · [Example run](examples/) · [Write-up](BLOG.md)
 
 ```bash
 python -m fin_analyst MSFT "How liquid is Microsoft, and what drives its return on equity?"
 ```
 
-> Iteration 1 complete; iteration 2 has peer comparison. 101 tests, none of which touch the network.
+Claude chooses which ratios answer the question and writes the prose. Python pulls the filing,
+computes every ratio, and fills in every figure. A checker rejects any draft where the model typed
+a number itself, and a second Claude call verifies that each cited explanation is actually in the
+passage it cites.
+
+146 tests, none of which touch the network or need an API key. A memo costs a few cents.
 
 ## How it works
 
@@ -147,6 +154,11 @@ surfaced only as a memo reading slightly wrong; this shows them in seconds.
 table into a dated folder. A company that fails is recorded and the batch carries on, and a total
 spend cap sits above the per-memo guard. Two companies came to $0.0615.
 
+## Install
+
+See [QUICKSTART.md](QUICKSTART.md) for the five-minute version, including the two things that trip
+people up (run from the project root; use the virtualenv).
+
 ## Setup
 
 ```bash
@@ -186,4 +198,30 @@ and token ceilings are set per node in `config.yaml`.
   always shows the period end date, so it is visible rather than hidden.
 - Not investment advice: no price targets, no buy/sell calls.
 
-See [`PLAN.md`](PLAN.md) for the build spec and what iteration 2 would add.
+## How it was checked
+
+Each layer of checking found a defect in the layer beneath it, and every one is now covered by a
+test:
+
+- **Running a second company** found fiscal years taken from an unreliable column: Costco's FY2024
+  figures arrive labelled 2025, so last year's balance sheet overwrote this year's. Microsoft's June
+  year-end never collides, so one company would never have shown it.
+- **The same run** found a missing XBRL tag being read as zero, producing a quick ratio that was
+  wrong and looked reasonable.
+- **Grading the claim checker** found a *retrieval* bug: the search ranked a paragraph about currency
+  effects above the one explaining operating expenses. The judge had been right about the wrong
+  paragraph.
+- **Testing that fix** found that with few passages, BM25 gives common terms negative weight, so
+  filtering on a positive score returned nothing at all.
+
+## Reading further
+
+- [`QUICKSTART.md`](QUICKSTART.md) — setup, every command, what each costs, and what the errors mean
+- [`examples/`](examples/) — a real memo and its full run record, including a rejected draft
+- [`BLOG.md`](BLOG.md) — why it is built this way, and what the checks caught
+- [`PLAN.md`](PLAN.md) — the build spec, step by step, and what is still unbuilt
+- [`CLAUDE.md`](CLAUDE.md) — the invariants, for anyone (or any agent) changing the code
+
+Definitions follow Berk & DeMarzo, *Corporate Finance* Ch. 2 and Subramanyam, *Financial Statement
+Analysis*; the evaluation design follows Huyen, *AI Engineering*. Filing text in the test fixtures
+comes from public SEC EDGAR filings.
