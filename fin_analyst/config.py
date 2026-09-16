@@ -9,29 +9,52 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
+EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+
+
+@dataclass(frozen=True)
+class NodeSettings:
+    """How one Claude-using node calls the model."""
+
+    model: str
+    effort: str
+    max_tokens: int
 
 
 @dataclass(frozen=True)
 class Settings:
-    model: str
-    input_price: float  # USD per million input tokens
-    output_price: float  # USD per million output tokens (thinking tokens bill as output)
+    nodes: dict[str, NodeSettings]
+    # model -> (USD per million input tokens, USD per million output tokens)
+    prices: dict[str, tuple[float, float]]
     max_usd_per_run: float
     max_retries: int
     sec_user_agent: str | None  # SEC rejects downloads without one
 
+    def cost_usd(self, model: str, input_tokens: int, output_tokens: int) -> float:
+        """What one call cost. Thinking tokens are billed as output."""
+        input_price, output_price = self.prices[model]
+        return (input_tokens * input_price + output_tokens * output_price) / 1_000_000
+
 
 def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
-    # Copies .env into the environment, where the anthropic SDK finds ANTHROPIC_API_KEY.
-    # Variables already set in the shell win.
+    # Copies .env into the environment, where the anthropic SDK finds
+    # ANTHROPIC_API_KEY. Variables already set in the shell win.
     load_dotenv(PROJECT_ROOT / ".env")
 
     raw = yaml.safe_load(config_path.read_text())
-    prices = raw["price_per_million_tokens"]
     settings = Settings(
-        model=raw["model"],
-        input_price=float(prices["input"]),
-        output_price=float(prices["output"]),
+        nodes={
+            name: NodeSettings(
+                model=node["model"],
+                effort=node["effort"],
+                max_tokens=int(node["max_tokens"]),
+            )
+            for name, node in raw["nodes"].items()
+        },
+        prices={
+            model: (float(price["input"]), float(price["output"]))
+            for model, price in raw["prices_per_million_tokens"].items()
+        },
         max_usd_per_run=float(raw["max_usd_per_run"]),
         max_retries=int(raw["max_retries"]),
         sec_user_agent=os.environ.get("SEC_USER_AGENT") or None,
@@ -41,4 +64,14 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         raise ValueError("max_usd_per_run must be greater than 0")
     if settings.max_retries < 0:
         raise ValueError("max_retries cannot be negative")
+    for name, node in settings.nodes.items():
+        if node.model not in settings.prices:
+            raise ValueError(
+                f"node '{name}' uses {node.model}, which has no price in "
+                "prices_per_million_tokens; the budget guard needs one"
+            )
+        if node.effort not in EFFORT_LEVELS:
+            raise ValueError(f"node '{name}' has effort '{node.effort}'; use one of {EFFORT_LEVELS}")
+        if node.max_tokens <= 0:
+            raise ValueError(f"node '{name}' needs a positive max_tokens")
     return settings

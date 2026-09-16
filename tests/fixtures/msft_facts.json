@@ -1,0 +1,317 @@
+[
+  {
+    "line_item": "accounts_receivable",
+    "fiscal_year": 2026,
+    "value": 80876000000.0,
+    "concept": "us-gaap:AccountsReceivableNetCurrent",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "accounts_receivable",
+    "fiscal_year": 2025,
+    "value": 69905000000.0,
+    "concept": "us-gaap:AccountsReceivableNetCurrent",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "cash",
+    "fiscal_year": 2026,
+    "value": 20935000000.0,
+    "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "cash",
+    "fiscal_year": 2025,
+    "value": 30242000000.0,
+    "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "current_assets",
+    "fiscal_year": 2026,
+    "value": 207710000000.0,
+    "concept": "us-gaap:AssetsCurrent",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "current_assets",
+    "fiscal_year": 2025,
+    "value": 191131000000.0,
+    "concept": "us-gaap:AssetsCurrent",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "current_liabilities",
+    "fiscal_year": 2026,
+    "value": 168825000000.0,
+    "concept": "us-gaap:LiabilitiesCurrent",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "current_liabilities",
+    "fiscal_year": 2025,
+    "value": 141218000000.0,
+    "concept": "us-gaap:LiabilitiesCurrent",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "current_long_term_debt",
+    "fiscal_year": 2026,
+    "value": 9227000000.0,
+    "concept": "us-gaap:LongTermDebtCurrent",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "current_long_term_debt",
+    "fiscal_year": 2025,
+    "value": 2999000000.0,
+    "concept": "us-gaap:LongTermDebtCurrent",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "equity",
+    "fiscal_year": 2026,
+    "value": 442387000000.0,
+    "concept": "us-gaap:StockholdersEquity",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "equity",
+    "fiscal_year": 2025,
+    "value": 343479000000.0,
+    "concept": "us-gaap:StockholdersEquity",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "equity",
+    "fiscal_year": 2024,
+    "value": 268477000000.0,
+    "concept": "us-gaap:StockholdersEquity",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "gross_profit",
+    "fiscal_year": 2026,
+    "value": 225465000000.0,
+    "concept": "us-gaap:GrossProfit",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "gross_profit",
+    "fiscal_year": 2025,
+    "value": 193893000000.0,
+    "concept": "us-gaap:GrossProfit",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "gross_profit",
+    "fiscal_year": 2024,
+    "value": 171008000000.0,
+    "concept": "us-gaap:GrossProfit",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "liabilities_and_equity",
+    "fiscal_year": 2026,
+    "value": 758376000000.0,
+    "concept": "us-gaap:LiabilitiesAndStockholdersEquity",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "liabilities_and_equity",
+    "fiscal_year": 2025,
+    "value": 619003000000.0,
+    "concept": "us-gaap:LiabilitiesAndStockholdersEquity",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "long_term_debt",
+    "fiscal_year": 2026,
+    "value": 31067000000.0,
+    "concept": "us-gaap:LongTermDebtNoncurrent",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "long_term_debt",
+    "fiscal_year": 2025,
+    "value": 40152000000.0,
+    "concept": "us-gaap:LongTermDebtNoncurrent",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "net_income",
+    "fiscal_year": 2026,
+    "value": 133749000000.0,
+    "concept": "us-gaap:NetIncomeLoss",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "net_income",
+    "fiscal_year": 2025,
+    "value": 101832000000.0,
+    "concept": "us-gaap:NetIncomeLoss",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "net_income",
+    "fiscal_year": 2024,
+    "value": 88136000000.0,
+    "concept": "us-gaap:NetIncomeLoss",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "operating_cash_flow",
+    "fiscal_year": 2026,
+    "value": 182935000000.0,
+    "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "operating_cash_flow",
+    "fiscal_year": 2025,
+    "value": 136162000000.0,
+    "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "operating_cash_flow",
+    "fiscal_year": 2024,
+    "value": 118548000000.0,
+    "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "revenue",
+    "fiscal_year": 2026,
+    "value": 331839000000.0,
+    "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "revenue",
+    "fiscal_year": 2025,
+    "value": 281724000000.0,
+    "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "revenue",
+    "fiscal_year": 2024,
+    "value": 245122000000.0,
+    "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "short_term_borrowings",
+    "fiscal_year": 2026,
+    "value": 0.0,
+    "concept": "",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": false
+  },
+  {
+    "line_item": "short_term_borrowings",
+    "fiscal_year": 2025,
+    "value": 0.0,
+    "concept": "",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": false
+  },
+  {
+    "line_item": "short_term_investments",
+    "fiscal_year": 2026,
+    "value": 55908000000.0,
+    "concept": "us-gaap:ShortTermInvestments",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "short_term_investments",
+    "fiscal_year": 2025,
+    "value": 64323000000.0,
+    "concept": "us-gaap:ShortTermInvestments",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "total_assets",
+    "fiscal_year": 2026,
+    "value": 758376000000.0,
+    "concept": "us-gaap:Assets",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  },
+  {
+    "line_item": "total_assets",
+    "fiscal_year": 2025,
+    "value": 619003000000.0,
+    "concept": "us-gaap:Assets",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true
+  }
+]

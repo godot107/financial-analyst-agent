@@ -106,12 +106,14 @@ and evaluate them." The memo goes next to it as `.md`.
 financial-analyst-agent/
 ├── fin_analyst/
 │   ├── __main__.py   # CLI
-│   ├── config.py     # config.yaml + .env
+│   ├── config.py     # config.yaml + .env; per-node model/effort/token cap + cost maths
 │   ├── edgar.py      # Step 1: 10-K → facts            (no LLM)
 │   ├── metrics.py    # Step 2: ratio functions          (no LLM)
 │   ├── memo.py       # Step 3: placeholders + checks    (no LLM)
 │   ├── llm.py        # Step 5: the only file that imports anthropic
 │   └── graph.py      # Step 4: LangGraph nodes + wiring + run record
+├── scripts/
+│   └── record_fixture.py   # re-record a company's facts on purpose
 ├── tests/
 │   └── fixtures/     # recorded 10-K facts, so tests need no network
 ├── config.yaml       # model, budget, retries, prices
@@ -127,7 +129,7 @@ imports `anthropic` or `fin_analyst.llm`.
 Venv, pinned requirements, `config.yaml`, CLI skeleton, isolation test.
 **Done when:** `pytest` passes and `python -m fin_analyst --help` works.
 
-### Step 1 — Fetch facts from one 10-K (`edgar.py`)
+### Step 1 — Fetch facts from one 10-K (`edgar.py`) ✅
 - Ticker → latest 10-K → balance sheet, income statement and cash flow → `list[Fact]`, using
   edgartools (`set_identity`, `Company`, `get_filings(form="10-K")`, `filing.xbrl()`,
   `xbrl.statements...`). Check the exact calls against current edgartools docs.
@@ -149,7 +151,16 @@ Venv, pinned requirements, `config.yaml`, CLI skeleton, isolation test.
   aren't presented by every company. If one isn't found, record it as `0` with the note
   "not reported, treated as 0", and list it in the memo footer. Every other missing line item is
   simply left out, so metrics that need it return `None`.
-- Save MSFT's facts as a JSON fixture.
+- Save MSFT's facts as a JSON fixture: `python scripts/record_fixture.py MSFT`.
+
+**As built (MSFT FY2026 10-K, accession 0001193125-26-323660):** 35 facts, every value matching
+the filing's own rendered balance sheet. Two rules earned their own tests:
+- **Dimensioned rows must be dropped.** A filing tags the same concept again per segment and per
+  equity component; those rows sit beside the whole-company total.
+- **Only annual durations.** A 10-K also carries quarterly figures.
+
+Equity comes with 3 year-ends (the statement of equity carries an extra year) while the balance
+sheet has 2, so ROE covers 3 years but the equity multiplier covers 2.
 
 **Done when:**
 - total assets = total liabilities and equity for both year-ends (this catches wrong periods or
@@ -225,8 +236,15 @@ placeholder, an allowed year, the rendered direction words, a `None` metric, and
   found.
 - Model `claude-opus-5`, adaptive thinking, and refusal fallbacks. Check `stop_reason` before
   reading.
-- Budget guard: after each call, add the cost from `usage` using the prices in `config.yaml`, and
-  stop if it passes `max_usd_per_run` ($1.00).
+- Each node reads its model, `effort` and `max_tokens` from `config.yaml`. Output tokens cost 5x
+  input and drive latency, so the ceilings are the main cost lever (Huyen Ch. 4); the 250-word
+  rule is the other half of it.
+- Budget guard: after each call, add the cost from `usage` using that model's prices in
+  `config.yaml`, and stop if it passes `max_usd_per_run` ($1.00). That cap is a runaway guard,
+  not a budget: a memo is 2 calls and should cost a few cents.
+- Prompt caching is deliberately **not** used yet. It pays off with long system prompts across
+  many calls (Huyen Ch. 9); these prompts are short and may fall below the minimum cacheable
+  size. Revisit when filing text enters the prompt in Iteration 2.
 - **Before the first live run:** ask Willie, stating the estimated cost.
 
 **Done when:** one live MSFT memo is saved in `runs/`, and the real cost is written in the README.
@@ -308,6 +326,8 @@ Pick from these based on what Iteration 1 taught:
 - **Fiscal years differ** (MSFT's ends in June). Label memos with the period-end date.
 - **SEC needs an identity:** set `SEC_USER_AGENT`, or requests get 403s.
 - **Parent vs total equity:** mixing them breaks ROE and the DuPont identity.
+- **Dimensioned XBRL rows** repeat a concept per segment or equity component. Taking one by
+  mistake silently gives a wrong number that still looks plausible.
 - **Total liabilities isn't always tagged.** The balance check uses total liabilities and equity
   instead.
 - **Debt has no single tag.** Add up its parts; never fall back to total liabilities.

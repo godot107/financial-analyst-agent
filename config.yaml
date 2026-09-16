@@ -1,13 +1,33 @@
 # Settings for a run. Secrets (API keys) go in .env, not here.
 
-# Which Claude model to use, and what it costs in USD per million tokens.
-# Check current prices at https://platform.claude.com/docs/en/pricing before changing.
-model: claude-opus-5
-price_per_million_tokens:
-  input: 5.00
-  output: 25.00
+# Each node gets its own model, effort and token ceiling, so one can be tuned
+# without touching code. Output tokens cost 5x input and drive latency, so the
+# ceilings matter more than anything else here.
+nodes:
+  plan:
+    model: claude-opus-5
+    effort: low # picking metrics from a list is an easy task
+    max_tokens: 512
+  write:
+    model: claude-opus-5
+    effort: medium
+    max_tokens: 1500 # the memo is ~250 words; this is a ceiling, not a target
 
-# Stop a run once it has spent more than this.
+# USD per million tokens. Check https://platform.claude.com/docs/en/pricing
+# before changing, and add a row before pointing a node at a new model.
+prices_per_million_tokens:
+  claude-opus-5:
+    input: 5.00
+    output: 25.00
+  claude-sonnet-5:
+    input: 2.00
+    output: 10.00
+  claude-haiku-4-5:
+    input: 1.00
+    output: 5.00
+
+# A runaway guard, not a budget. A memo should cost a few cents; if a run passes
+# this, something is wrong and it stops.
 max_usd_per_run: 1.00
 
 # How many more times `write` may try after `check` finds problems in a draft.

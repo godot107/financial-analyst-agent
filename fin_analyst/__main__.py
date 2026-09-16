@@ -22,7 +22,9 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Ticker:   {args.ticker.upper()}")
     print(f"Question: {args.question}")
-    print(f"Model:    {settings.model} (budget ${settings.max_usd_per_run:.2f} per run)")
+    for name, node in settings.nodes.items():
+        print(f"{name + ':':9s} {node.model}, effort {node.effort}, max {node.max_tokens} tokens")
+    print(f"Stops if a run passes ${settings.max_usd_per_run:.2f}")
     print("The workflow isn't built yet. See PLAN.md, Step 1 onward.")
     return 0
 
