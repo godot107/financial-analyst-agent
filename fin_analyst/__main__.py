@@ -16,6 +16,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("ticker", help="stock ticker, e.g. MSFT")
     parser.add_argument("question", help='what you want to know, e.g. "How liquid is Microsoft?"')
     parser.add_argument(
+        "--chat",
+        action="store_true",
+        help="keep asking follow-ups about the same company (a few turns, one shared budget)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="show the settings and stop, without calling Claude or spending anything",
@@ -33,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     for name, node in settings.nodes.items():
         print(f"{name + ':':9s} {node.model}, effort {node.effort}, max {node.max_tokens} tokens")
     print(f"Stops if a run passes ${settings.max_usd_per_run:.2f}")
+    if args.chat:
+        print(f"Chat:     up to {settings.chat_max_turns} questions, sharing that budget")
 
     if args.dry_run:
         print("\nDry run: nothing was called and nothing was spent.")
@@ -52,14 +59,51 @@ def main(argv: list[str] | None = None) -> int:
     from fin_analyst.llm import ClaudeAnalyst
 
     print("\nWorking...\n")
-    state = run_analysis(ticker, args.question, ClaudeAnalyst(settings), settings)
+    analyst = ClaudeAnalyst(settings)
 
+    if args.chat:
+        return run_chat(ticker, args.question, analyst, settings)
+
+    state = run_analysis(ticker, args.question, analyst, settings)
+    show(state, analyst)
+    return 0 if state.memo else 1
+
+
+def show(state, analyst) -> None:
     if state.memo:
         print(state.memo)
     else:
         print(f"No memo: {state.error}", file=sys.stderr)
-    print(f"\n[{len(state.drafts)} draft(s), ${state.cost_usd:.4f}]", file=sys.stderr)
-    return 0 if state.memo else 1
+    # analyst.spent_usd counts rejected replies too; state.cost_usd only counts
+    # the calls the workflow accepted.
+    print(f"\n[{len(state.drafts)} draft(s), ${analyst.spent_usd:.4f} spent]", file=sys.stderr)
+
+
+def run_chat(ticker: str, question: str, analyst, settings) -> int:
+    """Ask follow-ups until the turns or the budget run out, whichever comes first."""
+    from fin_analyst.chat import ChatSession
+
+    chat = ChatSession(ticker, analyst, settings)
+    answered = 0
+
+    while question:
+        state = chat.ask(question)
+        show(state, analyst)
+        answered += state.memo is not None
+
+        if chat.turns_left <= 0:
+            print(f"\nThat was the last of {settings.chat_max_turns} questions.", file=sys.stderr)
+            break
+        if state.error and "over the" in state.error:
+            break
+
+        try:
+            question = input(f"\n[{chat.turns_left} left] Ask another, or press enter to stop: ").strip()
+        except EOFError:
+            break
+
+    print(f"\n[{answered} answer(s), ${analyst.spent_usd:.4f} spent in total]", file=sys.stderr)
+    return 0 if answered else 1
 
 
 if __name__ == "__main__":

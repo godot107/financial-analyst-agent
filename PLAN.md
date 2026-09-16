@@ -331,7 +331,7 @@ than stack traces. `--dry-run` prints the settings and spends nothing.
 
 **Done when:** one live MSFT memo is saved in `runs/`, and the real cost is written in the README.
 
-### Step 6 — Prove it
+### Step 6 — Prove it ✅
 Ask Willie before these live runs, with the estimated cost.
 
 - **Trend-flip test (prose follows the data):** edit the MSFT fixture so a real trend reverses.
@@ -372,6 +372,13 @@ Ask Willie before these live runs, with the estimated cost.
   - limitations: no peers, ending balances, leases excluded, banks
 
 **Done when:** all of that is in the README.
+
+**As built:** trend-flip passed, plan check 10/10, and the whole of Step 6 cost about $0.21.
+Running a second company (Costco) found two real defects — fiscal years taken from an unreliable
+column, and a missing receivables tag silently read as zero — both fixed with tests. `--chat` was
+added on top: follow-ups reuse the filing and see earlier answers, capped at 5 turns
+(`CHAT_TURN_CEILING`) with one budget across the conversation, since each turn resends the answers
+before it.
 
 ## 6. Iteration 2 (later, only after Step 6)
 

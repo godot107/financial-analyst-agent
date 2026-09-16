@@ -7,7 +7,7 @@ writer writes placeholders.
 """
 
 import anthropic
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fin_analyst.config import Settings
 from fin_analyst.graph import AnalysisFailed
@@ -16,10 +16,11 @@ from fin_analyst.metrics import METRICS_BY_ID, MetricResult, describe_metrics
 PLANNER_SYSTEM = """You choose which financial ratios answer a question about one company.
 You never compute, estimate or state a number.
 
-Choose 2 to 5 metric ids from this list, and nothing else:
+Choose metric ids from this list, and nothing else:
 {metrics}
 
-- Choose what answers the question asked, not everything related to it.
+- Choose what answers the question asked, not everything related to it: 2 to 5 for a
+  single question, and at most 8 if the question has several parts.
 - For a question about return on equity, include its three DuPont components.
 - Return the choice with the choose_metrics tool."""
 
@@ -35,6 +36,8 @@ Only the placeholders listed below exist. Anything else is an error.
 Rules:
 - No digits outside a placeholder: no percentages, no multiples, no "above 1 is healthy".
   You may name a fiscal year in prose when it appears in the data.
+- A year->year placeholder already renders its own verb ("fell 0.12x to 1.23x"), so do
+  not put "rose", "fell" or similar in front of one.
 - The values below are for your judgment only. Never repeat one as text.
 - Compare the company with its own prior year, and state plainly that there is no
   peer comparison.
@@ -52,7 +55,9 @@ class PlanChoice(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    metric_ids: list[str] = Field(min_length=1, max_length=5)
+    # A two-part question ("liquidity and what drives ROE") legitimately needs
+    # seven, so the ceiling is the registry, not a tidy number.
+    metric_ids: list[str] = Field(min_length=1, max_length=8)
 
 
 class ModelRefused(AnalysisFailed):
@@ -71,11 +76,12 @@ def plan_tool() -> dict:
         "input_schema": {
             "type": "object",
             "properties": {
+                # No minItems/maxItems: a strict tool's schema rejects them
+                # ("property 'maxItems' is not supported"). The count is asked
+                # for in the prompt and enforced by PlanChoice on the way back.
                 "metric_ids": {
                     "type": "array",
                     "items": {"type": "string", "enum": sorted(METRICS_BY_ID)},
-                    "minItems": 1,
-                    "maxItems": 5,
                 }
             },
             "required": ["metric_ids"],
@@ -105,8 +111,20 @@ def describe_values(metrics: list[MetricResult]) -> str:
     return "\n".join(lines)
 
 
-def writer_prompt(question: str, metrics: list[MetricResult], problems: list[str]) -> str:
-    parts = [f"Question: {question}", "", "Available placeholders and their values:", describe_values(metrics)]
+def writer_prompt(
+    question: str,
+    metrics: list[MetricResult],
+    problems: list[str],
+    history: list[tuple[str, str]] = (),
+) -> str:
+    parts = []
+    if history:
+        parts.append("Earlier in this conversation, you were asked and answered:")
+        for asked, answered in history:
+            parts += [f"Q: {asked}", f"A: {answered}", ""]
+        parts.append("Do not repeat those answers. Build on them, and answer only what is asked now.")
+        parts.append("")
+    parts += [f"Question: {question}", "", "Available placeholders and their values:", describe_values(metrics)]
     if problems:
         parts += [
             "",
@@ -125,6 +143,9 @@ class ClaudeAnalyst:
         # A benign financial memo should never be refused, but a refusal would
         # otherwise end the run; the fallback model finishes it instead.
         self.refusal_fallbacks = refusal_fallbacks
+        # Every call's cost, including calls whose reply we then reject, so a
+        # failed run still reports what it spent.
+        self.spent_usd = 0.0
 
     def _call(self, node: str, system: str, user: str, tools: list[dict] | None = None):
         settings = self.settings.nodes[node]
@@ -164,6 +185,7 @@ class ClaudeAnalyst:
         cost = self.settings.cost_usd(
             settings.model, response.usage.input_tokens, response.usage.output_tokens
         )
+        self.spent_usd += cost
 
         if response.stop_reason == "refusal":
             details = getattr(response, "stop_details", None)
@@ -184,7 +206,10 @@ class ClaudeAnalyst:
         )
         for block in response.content:
             if block.type == "tool_use":
-                return PlanChoice.model_validate(block.input).metric_ids, cost
+                try:
+                    return PlanChoice.model_validate(block.input).metric_ids, cost
+                except ValidationError as invalid:
+                    raise AnalysisFailed(f"the planner's choice was not usable: {invalid}") from None
         raise AnalysisFailed("the planner returned no tool call, so no metrics were chosen")
 
     def write_draft(
@@ -193,11 +218,12 @@ class ClaudeAnalyst:
         question: str,
         metrics: list[MetricResult],
         problems: list[str],
+        history: list[tuple[str, str]] = (),
     ) -> tuple[str, float]:
         response, cost = self._call(
             "write",
             WRITER_SYSTEM.format(ticker=ticker),
-            writer_prompt(question, metrics, problems),
+            writer_prompt(question, metrics, problems, history),
         )
         draft = "\n".join(b.text for b in response.content if b.type == "text").strip()
         if not draft:

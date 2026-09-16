@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1, Steps 0–5 written (81 tests). The first live run is still pending: it needs a working `ANTHROPIC_API_KEY` and Willie's approval. Then Step 6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete (95 tests). Live runs work; a memo costs about $0.03. Results and limitations are in the README. Iteration 2 is unstarted — see `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -15,6 +15,8 @@ pip install -r requirements.txt
 cp .env.example .env              # ANTHROPIC_API_KEY, SEC_USER_AGENT
 pytest                            # no network, no API key needed
 python -m fin_analyst MSFT "How liquid is Microsoft?"
+python -m fin_analyst MSFT "How liquid is Microsoft?" --chat      # up to 5 follow-ups
+python -m fin_analyst MSFT "..." --dry-run                        # spends nothing
 ```
 
 Project-local `.venv`. Local only: no AWS or Bedrock.
@@ -36,6 +38,8 @@ Project-local `.venv`. Local only: no AWS or Bedrock.
   income and equity. Quick ratio = (cash + short-term investments + receivables) / current
   liabilities. Debt = the sum of the debt lines, never total liabilities.
 - **Every run saves a JSON run record in `runs/`**, even when no memo is produced.
+- **Never trust the filing's `fiscal_year` column** — derive the year from the period end date
+  (`fiscal_year_of`). Late-August filers label last year's figures with this year.
 - **Values that move between nodes are Pydantic models** (`Fact`, `MetricResult`, the graph state,
   and Claude's plan), so a bad value fails at the node that made it.
 - **Tests never hit the network or the API.** Use fixtures in `tests/fixtures/` and a fake client.

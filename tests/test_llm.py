@@ -86,6 +86,10 @@ def test_the_tool_only_allows_metrics_that_exist():
     # Strict tool use requires both of these, or Claude's arguments aren't validated.
     assert plan_tool()["strict"] is True
     assert schema["additionalProperties"] is False
+    # The API rejects array length limits in a strict tool schema, so the count
+    # is enforced by PlanChoice instead. Removing this guard reintroduces a 400.
+    assert "maxItems" not in schema["properties"]["metric_ids"]
+    assert "minItems" not in schema["properties"]["metric_ids"]
 
 
 def test_the_plan_comes_back_as_metric_ids_and_a_cost(settings):
@@ -107,6 +111,29 @@ def test_a_plan_with_no_tool_call_is_an_error(settings):
 def test_a_plan_that_breaks_its_own_schema_is_rejected(settings):
     with pytest.raises(ValueError):
         PlanChoice.model_validate({"metric_ids": [], "note": "extra"})
+
+
+def test_too_many_metrics_is_a_recorded_failure_not_a_crash(settings):
+    a, _ = analyst(settings, reply([tool_block(metric_ids=sorted(METRICS_BY_ID))]))
+    with pytest.raises(AnalysisFailed, match="not usable"):
+        a.choose_metrics("MSFT", "tell me everything")
+
+
+def test_a_two_part_question_may_use_more_than_five_metrics(settings):
+    """Liquidity plus the DuPont breakdown is legitimately seven."""
+    seven = ["current_ratio", "quick_ratio", "cash_flow_ratio", "roe", "net_margin",
+             "asset_turnover", "equity_multiplier"]
+    picked, _ = analyst(settings, reply([tool_block(metric_ids=seven)]))[0].choose_metrics(
+        "MSFT", "How liquid is it, and what drives ROE?"
+    )
+    assert picked == seven
+
+
+def test_spending_is_counted_even_when_the_reply_is_rejected(settings):
+    a, _ = analyst(settings, reply([text_block("x")], stop_reason="max_tokens"))
+    with pytest.raises(ResponseTruncated):
+        a.write_draft("MSFT", "q", METRICS, [])
+    assert a.spent_usd > 0
 
 
 # --- the writer -----------------------------------------------------------

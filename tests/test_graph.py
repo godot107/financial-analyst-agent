@@ -27,12 +27,14 @@ class FakeAnalyst:
         self.metric_ids = list(metric_ids)
         self.cost = cost
         self.problems_seen = []
+        self.history_seen = []
 
     def choose_metrics(self, ticker, question):
         return self.metric_ids, self.cost
 
-    def write_draft(self, ticker, question, metrics, problems):
+    def write_draft(self, ticker, question, metrics, problems, history=()):
         self.problems_seen.append(problems)
+        self.history_seen.append(list(history))
         return self.drafts.pop(0), self.cost
 
 

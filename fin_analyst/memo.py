@@ -14,6 +14,14 @@ import re
 from fin_analyst.metrics import MetricResult
 
 PLACEHOLDER = re.compile(r"\{\{([a-z_]+):(\d{4})(?:->(\d{4}))?\}\}")
+# A change placeholder renders its own verb ("fell 0.12x to 1.23x"), so a verb
+# typed in front of one reads as "fell fell 0.12x". Drop the writer's word; the
+# rendered one is the one guaranteed to match the data.
+DOUBLED_VERB = re.compile(
+    r"\b(?:rose|fell|grew|climbed|dropped|slipped|increased|decreased|declined|expanded|contracted)\s+"
+    r"(\{\{[a-z_]+:\d{4}->\d{4}\}\})",
+    re.IGNORECASE,
+)
 # Allowed in prose despite containing digits: the form name and fiscal years,
 # which the check adds from the data it was given.
 ALWAYS_ALLOWED = {"10-K", "10-Q", "8-K"}
@@ -97,7 +105,7 @@ def render(draft: str, metrics: list[MetricResult], footer: str = "") -> str:
             return _format_change(results[(metric_id, start_year)], results[(metric_id, int(end_year))])
         return _format_value(results[(metric_id, start_year)])
 
-    memo = PLACEHOLDER.sub(replace, draft)
+    memo = PLACEHOLDER.sub(replace, DOUBLED_VERB.sub(r"\1", draft))
     return f"{memo.rstrip()}\n\n{footer}" if footer else memo
 
 

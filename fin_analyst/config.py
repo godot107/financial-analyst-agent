@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+# Every follow-up resends the answers before it, so a long chat costs more per
+# turn than the one before. Five is the most this project will run.
+CHAT_TURN_CEILING = 5
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,7 @@ class Settings:
     prices: dict[str, tuple[float, float]]
     max_usd_per_run: float
     max_retries: int
+    chat_max_turns: int
     sec_user_agent: str | None  # SEC rejects downloads without one
 
     def cost_usd(self, model: str, input_tokens: int, output_tokens: int) -> float:
@@ -57,6 +61,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         },
         max_usd_per_run=float(raw["max_usd_per_run"]),
         max_retries=int(raw["max_retries"]),
+        chat_max_turns=int(raw.get("chat_max_turns", CHAT_TURN_CEILING)),
         sec_user_agent=os.environ.get("SEC_USER_AGENT") or None,
     )
 
@@ -64,6 +69,8 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         raise ValueError("max_usd_per_run must be greater than 0")
     if settings.max_retries < 0:
         raise ValueError("max_retries cannot be negative")
+    if not 1 <= settings.chat_max_turns <= CHAT_TURN_CEILING:
+        raise ValueError(f"chat_max_turns must be between 1 and {CHAT_TURN_CEILING}")
     for name, node in settings.nodes.items():
         if node.model not in settings.prices:
             raise ValueError(

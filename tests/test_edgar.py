@@ -140,3 +140,58 @@ def test_fetch_needs_an_sec_identity(monkeypatch):
     monkeypatch.delenv("SEC_USER_AGENT", raising=False)
     with pytest.raises(RuntimeError, match="SEC_USER_AGENT"):
         fetch_facts("MSFT")
+
+
+def test_balance_sheet_dates_are_dated_by_the_income_statement():
+    """A late-August fiscal year puts the prior year-end in the next calendar
+    year, and the filing labels both with the same fiscal year. Trusting that
+    would let last year's balance sheet overwrite this year's."""
+    df = make_rows(
+        [
+            # Two years of income, which date the two balance sheets.
+            {
+                "concept": "us-gaap:Revenues",
+                "numeric_value": 200.0,
+                "period_type": "duration",
+                "fiscal_period": "FY",
+                "period_end": "2025-08-31",
+                "fiscal_year": 2025,
+            },
+            {
+                "concept": "us-gaap:Revenues",
+                "numeric_value": 180.0,
+                "period_type": "duration",
+                "fiscal_period": "FY",
+                "period_end": "2024-09-01",
+                "fiscal_year": 2024,
+            },
+            # Both balance sheet dates arrive labelled 2025, as edgartools does.
+            {"concept": "us-gaap:Assets", "numeric_value": 100.0, "period_instant": "2025-08-31", "fiscal_year": 2025},
+            {"concept": "us-gaap:Assets", "numeric_value": 90.0, "period_instant": "2024-09-01", "fiscal_year": 2025},
+        ]
+    )
+    assets = by_item(select_facts(df, "acc"), "total_assets")
+    assert assets[2025].value == 100.0
+    assert assets[2024].value == 90.0
+
+
+def test_the_fixture_has_one_value_per_line_item_and_year(msft):
+    seen = [(f.line_item, f.fiscal_year) for f in msft]
+    assert len(seen) == len(set(seen)), "a duplicate means two dates collided on one year"
+
+
+def test_the_fiscal_year_comes_from_the_date_not_the_filing_s_label():
+    """Costco's FY2024 figures arrive labelled 2025 by edgartools."""
+    df = make_rows(
+        [
+            {
+                "concept": "us-gaap:Revenues",
+                "numeric_value": 254.0,
+                "period_type": "duration",
+                "fiscal_period": "FY",
+                "period_end": "2024-09-01",
+                "fiscal_year": 2025,  # what the filing says, and it is wrong
+            }
+        ]
+    )
+    assert by_item(select_facts(df, "acc"), "revenue")[2024].value == 254.0

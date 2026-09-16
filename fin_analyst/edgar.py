@@ -130,18 +130,35 @@ def select_facts(df: pd.DataFrame, accession: str) -> list[Fact]:
         for line_item, concepts in items.items():
             picked = _pick(rows, concepts)
             for _, row in picked.iterrows():
+                period = str(row[period_column])
                 facts.append(
                     Fact(
                         line_item=line_item,
-                        fiscal_year=int(row["fiscal_year"]),
+                        fiscal_year=fiscal_year_of(period),
                         value=float(row["numeric_value"]),
                         concept=str(row["concept"]),
-                        period=str(row[period_column]),
+                        period=period,
                         accession=accession,
                     )
                 )
 
     return _fill_optional(facts, instants, accession)
+
+
+def fiscal_year_of(period: str) -> int:
+    """The fiscal year a period belongs to, taken from its end date.
+
+    The filing's own fiscal_year column cannot be trusted. Costco's year ends in
+    late August, and its FY2024 figures - both the income statement ending
+    2024-09-01 and the balance sheet dated the same day - arrive labelled 2025.
+    Last year's numbers then overwrite this year's under one key.
+
+    Known limit: a year ending in the first days of January (some 52/53-week
+    retailers) is dated to the new calendar year, which is a year later than the
+    company calls it. The memo footer always shows the period end date, so the
+    ambiguity is visible rather than hidden.
+    """
+    return int(period[:4])
 
 
 def _fill_optional(facts: list[Fact], instants: pd.DataFrame, accession: str) -> list[Fact]:

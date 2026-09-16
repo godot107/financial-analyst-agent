@@ -35,7 +35,10 @@ class AnalysisState(BaseModel):
     drafts: list[str] = Field(default_factory=list)  # write: every attempt, latest last
     problems: list[str] = Field(default_factory=list)  # check: latest draft's problems
     memo: str | None = None  # render
-    cost_usd: float = 0.0
+    # Earlier questions and answers in a --chat session, oldest first. Empty for
+    # a one-shot run.
+    history: list[tuple[str, str]] = Field(default_factory=list)
+    cost_usd: float = 0.0  # this run, plus anything spent earlier in the session
     error: str | None = None  # gave up, or ran out of budget
 
 
@@ -51,6 +54,7 @@ class Analyst(Protocol):
         question: str,
         metrics: list[MetricResult],
         problems: list[str],
+        history: list[tuple[str, str]] = (),
     ) -> tuple[str, float]:
         """A memo draft written in placeholders, and what the call cost."""
 
@@ -96,7 +100,7 @@ def build_graph(
 
     def write(state: AnalysisState) -> dict:
         draft, cost = analyst.write_draft(
-            state.ticker, state.question, state.metrics, state.problems
+            state.ticker, state.question, state.metrics, state.problems, state.history
         )
         return {"drafts": state.drafts + [draft], "cost_usd": spend(state, cost)}
 
@@ -153,9 +157,20 @@ def run_analysis(
     settings: Settings,
     fetch: Callable[[str], list[Fact]] = fetch_facts,
     runs_dir: Path = RUNS,
+    history: list[tuple[str, str]] = (),
+    cost_so_far: float = 0.0,
 ) -> AnalysisState:
-    """Run the workflow and save what happened, memo or no memo."""
-    state = AnalysisState(ticker=ticker.upper(), question=question)
+    """Run the workflow and save what happened, memo or no memo.
+
+    `history` and `cost_so_far` carry a --chat session across turns, so the
+    budget guard covers the whole conversation rather than each turn separately.
+    """
+    state = AnalysisState(
+        ticker=ticker.upper(),
+        question=question,
+        history=list(history),
+        cost_usd=cost_so_far,
+    )
     graph = build_graph(analyst, settings, fetch)
 
     try:

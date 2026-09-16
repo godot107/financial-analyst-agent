@@ -85,6 +85,16 @@ def test_changes_render_their_own_direction():
     assert render("{{roe:2025->2026}}", METRICS) == "rose 0.6 pts to 30.2%"
 
 
+def test_a_verb_typed_in_front_of_a_change_placeholder_is_dropped():
+    """Otherwise the rendered memo reads "fell fell 0.12x to 1.23x"."""
+    assert render("The ratio fell {{current_ratio:2025->2026}}.", METRICS) == (
+        "The ratio fell 0.12x to 1.23x."
+    )
+    assert render("It ROSE {{roe:2025->2026}}.", METRICS) == "It rose 0.6 pts to 30.2%."
+    # A verb not attached to a change placeholder is the writer's own prose.
+    assert render("Liquidity fell overall.", METRICS) == "Liquidity fell overall."
+
+
 def test_an_unchanged_metric_says_so():
     flat = [result(year=2025, value=1.5), result(year=2026, value=1.5)]
     assert render("{{current_ratio:2025->2026}}", flat) == "was unchanged at 1.50x"

@@ -122,6 +122,26 @@ def test_negative_equity_gives_no_value():
     assert "negative" in only(results, "roe").reason
 
 
+def test_a_company_whose_receivables_tag_we_miss_gets_no_quick_ratio():
+    """Costco tags receivables in a way this tool does not recognise. Treating
+    that as zero would understate its liquidity while looking like an answer."""
+    unreported = [
+        Fact(
+            line_item=name,
+            fiscal_year=2026,
+            value=0.0,
+            concept="",
+            period="2026-06-30",
+            accession="acc",
+            reported=False,
+        )
+        for name in ("short_term_investments", "accounts_receivable")
+    ]
+    results = compute_all(facts(cash=100, current_liabilities=500) + unreported, ["quick_ratio"])
+    assert only(results, "quick_ratio").value is None
+    assert "receivable" in only(results, "quick_ratio").reason
+
+
 def test_a_company_with_no_debt_lines_is_not_treated_as_debt_free():
     unreported = [
         Fact(
@@ -137,7 +157,7 @@ def test_a_company_with_no_debt_lines_is_not_treated_as_debt_free():
     ]
     results = compute_all(facts(equity=1_000) + unreported, ["debt_to_equity"])
     assert only(results, "debt_to_equity").value is None
-    assert "no debt lines" in only(results, "debt_to_equity").reason
+    assert "no short_term_borrowings or current_long_term_debt" in only(results, "debt_to_equity").reason
 
 
 def test_zero_debt_lines_that_are_reported_do_compute():

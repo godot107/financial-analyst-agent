@@ -32,3 +32,7 @@ max_usd_per_run: 1.00
 
 # How many more times `write` may try after `check` finds problems in a draft.
 max_retries: 2
+
+# Follow-up questions in `--chat`. Each turn resends the previous answers, so
+# cost grows with the conversation. 5 is a hard ceiling in code, not just here.
+chat_max_turns: 5

@@ -45,8 +45,10 @@ class Metric:
     # Equity can be zero or negative after years of buybacks, which makes these
     # ratios misleading rather than merely large.
     denominator_must_be_positive: bool = False
-    # Debt: a company with no debt lines at all is different from one whose
-    # lines are simply zero.
+    # Lines we treat as zero when absent are safe only if at least one of a
+    # group is actually reported. A company with no commercial paper is real; a
+    # company with no receivables usually means we failed to recognise its tag,
+    # and zero would quietly overstate the ratio.
     needs_any_reported: tuple[str, ...] = ()
 
 
@@ -77,6 +79,7 @@ METRICS: tuple[Metric, ...] = (
         denominator="current_liabilities",
         formula=lambda v: (v["cash"] + v["short_term_investments"] + v["accounts_receivable"])
         / v["current_liabilities"],
+        needs_any_reported=("short_term_investments", "accounts_receivable"),
     ),
     Metric(
         id="cash_flow_ratio",
@@ -170,12 +173,13 @@ def compute(metric: Metric, year: int, values: Values) -> MetricResult:
     if metric.needs_any_reported and not any(
         values[name].reported for name in metric.needs_any_reported
     ):
+        wanted = " or ".join(metric.needs_any_reported)
         return MetricResult(
             metric_id=metric.id,
             fiscal_year=year,
             value=None,
             unit=metric.unit,
-            reason=f"the filing reports no debt lines for {year}",
+            reason=f"the filing reports no {wanted} for {year} under tags this tool knows",
         )
 
     numbers = {name: values[name].value for name in metric.inputs}
