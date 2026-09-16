@@ -211,3 +211,49 @@ def test_a_citation_nobody_gave_us_is_not_sent_to_the_judge():
 
 def test_a_draft_with_no_citations_needs_no_checking():
     assert cited_claims("Margins fell {{net_margin:2025->2026}}.", [filing_passage("t")]) == []
+
+
+# --- a change placeholder is a verb phrase --------------------------------
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "{{current_ratio:2025->2026}}.",
+        "Liquidity eased: {{current_ratio:2025->2026}}.",
+        "Liquidity eased. {{current_ratio:2025->2026}}.",
+        "- {{current_ratio:2025->2026}}",
+    ],
+)
+def test_a_change_placeholder_opening_a_clause_is_caught(draft):
+    """It renders "fell 0.12x to 1.23x", which needs a subject in front of it."""
+    problems = find_problems(draft, METRICS)
+    assert problems and "needs a subject" in problems[0]
+
+
+def test_a_change_placeholder_with_a_subject_is_fine():
+    assert find_problems("The current ratio {{current_ratio:2025->2026}}.", METRICS) == []
+    assert find_problems("- Net margin {{roe:2025->2026}}, the largest mover.", METRICS) == []
+
+
+# --- a change placeholder is a verb phrase --------------------------------
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "{{current_ratio:2025->2026}}.",
+        "Liquidity eased: {{current_ratio:2025->2026}}.",
+        "Liquidity eased. {{current_ratio:2025->2026}}.",
+        "- {{current_ratio:2025->2026}}",
+    ],
+)
+def test_a_change_placeholder_opening_a_clause_is_caught(draft):
+    """It renders "fell 0.12x to 1.23x", which needs a subject in front of it."""
+    problems = find_problems(draft, METRICS)
+    assert problems and "needs a subject" in problems[0]
+
+
+def test_a_change_placeholder_with_a_subject_is_fine():
+    assert find_problems("The current ratio {{current_ratio:2025->2026}}.", METRICS) == []
+    assert find_problems("- Net margin {{roe:2025->2026}}, the largest mover.", METRICS) == []

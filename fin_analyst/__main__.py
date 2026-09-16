@@ -7,6 +7,7 @@ import sys
 from fin_analyst.config import load_settings
 from fin_analyst.graph import run_analysis
 from fin_analyst.market import fetch_quote
+from fin_analyst.news import fetch_news
 from fin_analyst.passages import fetch_passages
 
 
@@ -26,6 +27,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-text",
         action="store_true",
         help="skip the filing's narrative: faster and cheaper, but the memo cannot say why",
+    )
+    parser.add_argument(
+        "--news",
+        action="store_true",
+        help="also read the company's recent 8-K press releases",
+    )
+    parser.add_argument(
+        "--news-index",
+        action="store_true",
+        help="add GDELT headlines to --news (noisy: mostly market commentary)",
     )
     parser.add_argument(
         "--market",
@@ -93,6 +104,11 @@ def main(argv: list[str] | None = None) -> int:
         ticker, args.question, analyst, settings, peer_ticker=args.peer,
         fetch_text=fetch_text, verify=not args.no_verify,
         quote=fetch_quote if args.market else None,
+        fetch_news=(
+            (lambda ticker: fetch_news(ticker, include_index=args.news_index))
+            if (args.news or args.news_index)
+            else None
+        ),
     )
     show(state, analyst)
     return 0 if state.memo else 1

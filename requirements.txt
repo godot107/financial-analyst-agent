@@ -8,5 +8,10 @@ pydantic==2.13.5
 python-dotenv==1.2.3
 PyYAML==6.0.3
 
+# API
+fastapi>=0.100.0
+uvicorn>=0.23.0
+mangum>=0.17.0
+
 # Dev
 pytest==9.1.1

@@ -1,0 +1,51 @@
+service: fin-analyst-agent
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: us-east-1 # Change to your preferred region
+  timeout: 29       # API Gateway max timeout is 29 seconds
+  memorySize: 1024  # Give it enough memory to run pandas/langgraph fast
+  environment:
+    # Set these in your environment before deploying, or use AWS Systems Manager (SSM)
+    ANTHROPIC_API_KEY: ${env:ANTHROPIC_API_KEY}
+    SEC_USER_AGENT: ${env:SEC_USER_AGENT}
+
+plugins:
+  - serverless-python-requirements
+  - serverless-domain-manager
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux # Compiles pandas/numpy correctly for Lambda environment
+    zip: true               # Compresses dependencies to stay under 250MB limit
+    slim: true              # Removes unnecessary files like .pyc, __pycache__
+  customDomain:
+    domainName: api.willieman.com # Replace 'api' with whatever subdomain you want
+    stage: ${self:provider.stage}
+    basePath: ''
+    certificateName: '*.willieman.com' # Must match ACM certificate in us-east-1
+    createRoute53Record: true
+
+functions:
+  api:
+    handler: api.handler # Points to handler inside api.py
+    events:
+      - http:
+          path: /analyze
+          method: post
+          cors: true
+          authorizer: aws_iam # This enforces the AWS SigV4 "signed API" requirement
+
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!.venv/**'
+    - '!tests/**'
+    - '!.pytest_cache/**'
+    - '!.git/**'
+    - '!evals/**'
+    - '!runs/**'
+    - '!examples/**'

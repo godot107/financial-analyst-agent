@@ -29,11 +29,13 @@ MAX_CHARS = 1400
 class Passage(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    id: str  # what the writer cites, e.g. "P3"
-    item: str  # "Item 7" or "Item 1A"
+    id: str  # what the writer cites, e.g. "P3", or "N1" for news
+    item: str  # "Item 7", "Item 1A", or a dated label for news
     text: str
     ticker: str
-    accession: str
+    accession: str  # the filing, or the source for news
+    url: str | None = None  # news only: where a reader can check it
+    published: str | None = None  # news only: the date it carries
 
 
 PassageList = TypeAdapter(list[Passage])

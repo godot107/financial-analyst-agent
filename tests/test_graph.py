@@ -235,7 +235,7 @@ def test_passages_reach_the_writer_and_the_memo_lists_what_was_cited(
     assert [p.id for p in state.passages] == [p.id for p in expected]
     assert analyst.passages_seen[0], "the writer was not given the passages"
     assert f"[{expected[0].id}]" in state.memo  # the citation survives rendering
-    assert "**Cited from the filing**" in state.memo
+    assert "**Cited sources**" in state.memo
     assert "Item 7" in state.memo
     # Only what was cited is listed, not everything retrieved.
     assert state.memo.count("filing 0001193125-26-323660") == 2  # one source line, one footer

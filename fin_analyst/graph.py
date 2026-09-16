@@ -106,6 +106,8 @@ def build_graph(
     passages_k: int = 4,
     verify: bool = True,
     quote: Callable[[str], object] | None = None,
+    fetch_news: Callable[[str], list[Passage]] | None = None,
+    news_k: int = 3,
 ):
     """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
 
@@ -160,9 +162,14 @@ def build_graph(
         Only the subject company: a peer's narrative would double the reading
         for a comparison the ratios already carry.
         """
-        if fetch_text is None:
-            return {}
-        return {"passages": search(fetch_text(state.ticker), state.question, passages_k)}
+        passages = []
+        if fetch_text:
+            passages += search(fetch_text(state.ticker), state.question, passages_k)
+        if fetch_news:
+            # Anything after the filing's year end, cited the same way and held
+            # to the same rules: words only, and every claim carries its source.
+            passages += search(fetch_news(state.ticker), state.question, news_k)
+        return {"passages": passages}
 
     def write(state: AnalysisState) -> dict:
         draft, cost = analyst.write_draft(
@@ -235,7 +242,8 @@ def build_graph(
 
     def render_node(state: AnalysisState) -> dict:
         footer = build_footer(
-            state.facts, state.metrics, state.ticker, state.peer_facts, state.peer_ticker
+            state.facts, state.metrics, state.ticker, state.peer_facts, state.peer_ticker,
+            state.passages,
         )
         return {
             "memo": render(
@@ -288,6 +296,7 @@ def run_analysis(
     peer_ticker: str | None = None,
     verify: bool = True,
     quote: Callable[[str], object] | None = None,
+    fetch_news: Callable[[str], list[Passage]] | None = None,
 ) -> AnalysisState:
     """Run the workflow and save what happened, memo or no memo.
 
@@ -301,7 +310,9 @@ def run_analysis(
         history=list(history),
         cost_usd=cost_so_far,
     )
-    graph = build_graph(analyst, settings, fetch, fetch_text, verify=verify, quote=quote)
+    graph = build_graph(
+        analyst, settings, fetch, fetch_text, verify=verify, quote=quote, fetch_news=fetch_news
+    )
 
     try:
         state = AnalysisState.model_validate(graph.invoke(state))

@@ -33,7 +33,7 @@ costs a few cents.
 ## 3. Check the setup without spending anything
 
 ```bash
-pytest                                              # 146 tests, no network, no API key
+pytest                                              # 170 tests, no network, no API key
 python -m fin_analyst MSFT "How liquid is it?" --dry-run
 python scripts/coverage.py MSFT                     # reads the filing, calls no model
 ```
@@ -72,6 +72,9 @@ python -m fin_analyst MSFT "Why did gross margin change?"
 
 # compare two companies
 python -m fin_analyst MSFT "How does its liquidity compare?" --peer GOOGL
+
+# add the company's recent 8-K press releases (free, no key)
+python -m fin_analyst MSFT "What has it announced about AI capacity?" --news
 
 # ask follow-ups (up to 5, one shared budget)
 python -m fin_analyst MSFT "How liquid is it?" --chat

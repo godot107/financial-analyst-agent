@@ -14,7 +14,7 @@ computes every ratio, and fills in every figure. A checker rejects any draft whe
 a number itself, and a second Claude call verifies that each cited explanation is actually in the
 passage it cites.
 
-146 tests, none of which touch the network or need an API key. A memo costs a few cents.
+170 tests, none of which touch the network or need an API key. A memo costs a few cents.
 
 ## How it works
 
@@ -88,6 +88,12 @@ the currency text repeats "expenses", while the question's "increase" never matc
 then found a second bug: with few passages BM25 gives common terms negative weight, so filtering on
 a positive score silently returned nothing at all.
 
+Adding news then exposed a contradiction of my own making: the prompt told the writer to date its
+news, while the checker rejected every digit — so the first news run failed closed after three
+drafts, on a date. Dates the sources themselves carry now pass; everything else is still caught.
+A related rule became checkable rather than advisory: a change placeholder renders a verb phrase
+("fell 0.12x to 1.23x"), so one opening a clause, with no subject, is now a rejected draft.
+
 Two false positives were costing real money, each burning a $0.03 retry: **"FY2026"** failed the
 leak check (there is no word boundary between "Y" and "2"), and **"Microsoft 365"** failed it too,
 because a product name with digits looked like a figure. Names the filing itself uses are now
@@ -117,6 +123,21 @@ box". Every explanation carries a citation, each cited passage is quoted under t
 is handed to the model as quoted material, never as instructions.
 
 `--no-text` skips it when you only want the ratios.
+
+## What happened since the filing
+
+A 10-K can be a year old. `--news` adds the company's recent 8-K press releases, cited as `[N1]`
+and held to the same rules: words only, every claim carries its source and its date, and nothing
+from them is presented as part of the 10-K.
+
+```bash
+python -m fin_analyst MSFT "What has it said recently about AI capacity?" --news
+```
+
+`--news-index` adds GDELT headlines too, but it is off by default for a measured reason: even
+restricted to business desks, the index answered a question about Microsoft with market commentary
+("Cramer reveals his favorite Mag 7 stock") rather than company facts. The company's own filings
+are the better source.
 
 ## Comparing two companies
 

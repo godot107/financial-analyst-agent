@@ -396,8 +396,17 @@ Pick from these based on what Iteration 1 taught:
   ✅ **The claim-support check** is built too: a `verify` node asks Claude whether each cited claim
   is in the passage it cites, unsupported claims go back to the writer as problems, and every
   verdict is kept in the run record. Graded 8/8 against hand labels (`evals/claim_check.py`).
-- **Recent news and commentary**, as one new `news` node between `compute` and `write`. Add the
-  sources in this order:
+- ✅ **Recent news** (`news.py`, `--news`). Built from 8-K press-release exhibits, which are the
+  company's own words and carry accession numbers. GDELT is wired as `--news-index` but **off by
+  default, because it loses**: even restricted to business desks, a question about Microsoft
+  returned "Cramer reveals his favorite Mag 7 stock" and upgrade/downgrade lists — market
+  commentary, not company facts. NewsAPI was not built; its free plan forbids any non-development
+  use. News arrives as `[N..]` passages, so citation, the leak check and the claim check all apply
+  unchanged. One contradiction had to be fixed: the prompt asked for dated news while the checker
+  rejected every digit, so the first live run failed closed after three drafts ($0.12) on a date.
+  Dates the sources themselves carry are now allowed; any other digit is still caught.
+
+  The original design notes follow. Sources, in the order considered:
   1. 8-K earnings press releases (Exhibit 99.1) via edgartools: free, published by the company,
      same library as `fetch`
   2. A news index, chosen by `news_source` in `config.yaml` behind one shared interface:
@@ -427,7 +436,10 @@ Pick from these based on what Iteration 1 taught:
   - Every claim carries a source link and publication date.
   - The memo shows news in its own section, labelled with its dates, so it isn't mixed up with the
     10-K's fiscal period.
-- **Market data via Alpha Vantage**, as a `market` node beside `fetch`. It unlocks the valuation
+- ✅ **Market data via Alpha Vantage** (`market.py`, `--market`): P/E, market-to-book and
+  EV/revenue from the filing's diluted share count and a current price. Built as designed below;
+  needs a free `ALPHAVANTAGE_KEY`, and a missing key costs only those three ratios.
+  Original design notes: a `market` node beside `fetch`. It unlocks the valuation
   ratios Iteration 1 has none of: P/E, EV/EBITDA, market-to-book (B&D §2.6). Rules:
   - **Filings stay the source for anything on a financial statement.** Alpha Vantage's
     fundamentals are normalized and carry no accession number, which breaks the audit trail; their

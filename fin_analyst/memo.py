@@ -13,6 +13,7 @@ Placeholder shapes:
 import re
 
 from fin_analyst.metrics import MetricResult
+from fin_analyst.news import news_credit
 from fin_analyst.passages import Passage
 
 PLACEHOLDER = re.compile(r"\{\{(peer\.)?([a-z_]+):(\d{4})(?:->(\d{4}))?\}\}")
@@ -26,10 +27,41 @@ DOUBLED_VERB = re.compile(
 )
 # A citation of a filing passage, e.g. [P3]. The digits inside are an id, not a
 # figure, so they are stripped before the leak check looks for numbers.
-CITATION = re.compile(r"\[(P\d+)\]")
+CITATION = re.compile(r"\[([PN]\d+)\]")  # P = the filing, N = news
 # Allowed in prose despite containing digits: the form name and fiscal years,
 # which the check adds from the data it was given.
 ALWAYS_ALLOWED = {"10-K", "10-Q", "8-K"}
+MONTHS = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
+
+
+def _dates_in(passages: list[Passage]) -> set[str]:
+    """The dates the passages themselves carry.
+
+    News must be dated - a memo saying what a company announced without saying
+    when is worse than useless - so those dates have to survive a check that
+    otherwise rejects every digit. Only dates the sources actually carry pass.
+    """
+    dates = set()
+    for passage in passages:
+        dates.update(re.findall(r"\d{4}-\d{2}-\d{2}", f"{passage.published or ''} {passage.item}"))
+    return dates
+
+
+def _strip_dates(text: str, dates: set[str]) -> str:
+    for iso in dates:
+        year, month, day = iso.split("-")
+        name = MONTHS[int(month) - 1]
+        for written in (
+            iso,
+            f"{name} {int(day)}, {year}",
+            f"{name} {int(day)} {year}",
+            f"{int(day)} {name} {year}",
+        ):
+            text = text.replace(written, " ")
+    return text
 
 
 def _results_by_key(metrics: list[MetricResult]) -> dict[tuple[str, int], MetricResult]:
@@ -84,6 +116,17 @@ def find_problems(
                     f"there is no {metric_id} for {year} for {whose}"
                 )
 
+    # A change placeholder renders "fell 0.12x to 1.23x", a verb phrase. Where a
+    # sentence or clause opens with one, the memo reads "Capacity shows in the
+    # asset base: fell 0.02x to 0.44x" - there is no subject for the verb.
+    clause_start = r"(?:^\s*(?:[-*]\s*)?|[.!?:;]\s*|\n\s*(?:[-*]\s*)?)"
+    change = r"(\{\{(?:peer\.)?[a-z_]+:\d{4}->\d{4}\}\})"
+    for match in re.finditer(clause_start + change, draft):
+        problems.append(
+            f"{match.group(1)} opens a clause, but it renders a verb phrase "
+            '("fell 0.12x to 1.23x"), so it needs a subject in front of it'
+        )
+
     known = {p.id for p in passages}
     for cited in dict.fromkeys(CITATION.findall(draft)):
         if cited not in known:
@@ -125,6 +168,7 @@ def _leaked_digits(
     Claude - except names the filing itself uses.
     """
     stripped = CITATION.sub(" ", PLACEHOLDER.sub(" ", draft))
+    stripped = _strip_dates(stripped, _dates_in(list(passages)))
     for allowed in ALWAYS_ALLOWED:
         stripped = stripped.replace(allowed, " ")
     for year in {str(m.fiscal_year) for m in metrics}:
@@ -191,12 +235,13 @@ def build_sources(memo: str, passages: list[Passage], quote_chars: int = 220) ->
     if not cited:
         return ""
 
-    lines = ["**Cited from the filing**"]
+    lines = ["**Cited sources**"]
     for passage in cited:
         quote = passage.text[:quote_chars].rstrip()
         if len(passage.text) > quote_chars:
             quote += "..."
-        lines.append(f'- [{passage.id}] {passage.item}, filing {passage.accession}: "{quote}"')
+        where = passage.url or f"filing {passage.accession}"
+        lines.append(f'- [{passage.id}] {passage.item}, {where}: "{quote}"')
     return "\n".join(lines)
 
 
@@ -212,6 +257,7 @@ def build_footer(
     ticker: str = "Source",
     peer_facts=(),
     peer_ticker: str | None = None,
+    passages: list[Passage] = (),
 ) -> str:
     """What a reader needs to check the memo, and what to distrust in it."""
     lines = ["---", _source_line(ticker, facts)]
@@ -237,6 +283,10 @@ def build_footer(
     unreported = sorted({f.line_item for f in facts if not f.reported})
     if unreported:
         lines.append(f"{ticker} does not report, so treated as zero: {', '.join(unreported)}.")
+    credit = news_credit(passages)
+    if credit:
+        lines.append(credit)
+
     peer_unreported = sorted({f.line_item for f in peer_facts if not f.reported})
     if peer_unreported:
         lines.append(
