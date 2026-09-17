@@ -112,7 +112,9 @@ questions:
   - ticker: AAPL
     question: Can Apple cover its interest expense?
     choose_any: [[interest_coverage]]
-    memo_includes_any: ["not available"]  # latest years have no interest expense line
+    # Latest years have no interest expense line. The memo may render the placeholder
+    # ("not available (...)") or say it in words, as the first graded run did.
+    memo_includes_any: ["not available", "cannot be computed", "no interest expense"]
   - ticker: AAPL
     question: How profitable is Apple?
     choose_any: [[gross_margin, operating_margin, net_margin, roe, roe_average_equity]]

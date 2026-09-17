@@ -49,6 +49,7 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | Memo with citations + claim check | 1 draft, 3 claims checked, all supported | $0.0429 |
 | **Claim-check grading**, 8 hand-labelled cases | **8/8 agreed** | $0.0167 |
 | **Gold set, figures**: 4 companies incl. a bank, checked against the 10-Ks' text | **57/57** | $0 |
+| **Gold set, questions**: 10 through the whole workflow | **33/36**; 9/10 memos on the first draft | $0.5199 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
 training, so a memo that reads well may be memory rather than retrieval. Placeholders already
@@ -70,7 +71,13 @@ python evals/claim_check.py   # ~$0.02
 level checks extraction and every ratio formula against those figures, plus what must be refused
 (Costco has no gross profit line, Apple no interest expense, JPMorgan no current/non-current
 split). The paid level runs the questions and grades the plan, the memo, whether the first draft
-passed, and wording the memo must or must not contain. The paid level hasn't been run yet.
+passed, and wording the memo must or must not contain. Its first run scored 33/36 for $0.52:
+nine memos passed on the first draft, and the tenth (Costco leverage over three filings) gave up
+after three. Two drafts were lost to the digit check flagging "Item 7" and "53-week", both quoted
+from the filing. The third was rightly rejected: it cited a passage to say what the filing "notes
+only", and the passage said more. The Apple check failed on the grader, not the memo, which said
+"cannot be computed" where the grader wanted "not available". All four are fixed; the run hasn't
+been repeated.
 
 **The claim checker is itself graded**, because AI judges err too (Huyen Ch. 4). Eight claims are
 paired with real passages and labelled by hand, and the hard cases are not opposites but claims

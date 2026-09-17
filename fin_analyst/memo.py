@@ -89,7 +89,9 @@ def _format_change(start: MetricResult, end: MetricResult) -> str:
         change = end.value - start.value
         size = f"{abs(change):.2f}x"
 
-    if abs(change) < 1e-9:
+    # Compare what will be printed, not the raw difference: a change of 0.003x
+    # would otherwise render as "rose 0.00x to 0.67x" (Apple's cash flow ratio).
+    if size in ("0.00x", "0.0 pts"):
         return f"was unchanged at {format_value(end)}"
     direction = "rose" if change > 0 else "fell"
     return f"{direction} {size} to {format_value(end)}"
@@ -202,10 +204,13 @@ def _rules_of_thumb(draft: str) -> list[str]:
     return problems
 
 
-# A name that happens to contain digits: "Microsoft 365", "Item 1A", "401k".
-# Never a measurement, which always carries a decimal point, a currency symbol
-# or a percent sign.
-NAME_LIKE = re.compile(r"^[A-Za-z]*\d+[A-Za-z]*$")
+# A name that happens to contain digits: "Microsoft 365", "Item 1A", "401k", or a
+# term like "53-week" (Costco's fiscal 2023). Never a measurement, which always
+# carries a decimal point, a currency symbol or a percent sign.
+NAME_LIKE = re.compile(r"^[A-Za-z]*\d+[A-Za-z]*(?:-[A-Za-z]+)?$")
+# The 10-K's own section names. "Item 7" cost Costco's memo a draft: the passage
+# text never contains the item number, only its label does.
+SECTION = re.compile(r"\bItems? \d{1,2}[A-C]?\b")
 
 
 def _is_a_name_from_the_filing(token: str, passages: list[Passage]) -> bool:
@@ -231,7 +236,7 @@ def _leaked_digits(
     in the data and the form names, and whatever digits remain were written by
     Claude - except names the filing itself uses.
     """
-    stripped = CITATION.sub(" ", PLACEHOLDER.sub(" ", draft))
+    stripped = SECTION.sub(" ", CITATION.sub(" ", PLACEHOLDER.sub(" ", draft)))
     stripped = _strip_dates(stripped, _dates_in(list(passages)))
     for allowed in ALWAYS_ALLOWED:
         stripped = stripped.replace(allowed, " ")

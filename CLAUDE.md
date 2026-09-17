@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 282 tests; `python evals/gold.py --free` (57 checks, $0) before a deploy; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 284 tests; `python evals/gold.py --free` (57 checks, $0) before a deploy; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run

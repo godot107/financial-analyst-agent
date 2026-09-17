@@ -317,3 +317,21 @@ def test_the_footer_names_restated_figures_and_the_variants_used():
     assert "revenue 2025 (first filed in old)" in footer
     assert "except roe_average_equity" in footer
     assert "Debt excludes lease liabilities." in footer
+
+
+def test_a_change_too_small_to_print_is_unchanged_not_rose_zero():
+    """Apple's cash flow ratio moved 0.003x and rendered as "rose 0.00x to 0.67x"."""
+    metrics = [result("cash_flow_ratio", 2025, 0.6730), result("cash_flow_ratio", 2024, 0.6704)]
+    memo = render("It {{cash_flow_ratio:2024->2025}}.", metrics)
+    assert memo == "It was unchanged at 0.67x."
+
+
+def test_section_names_and_terms_quoted_from_the_filing_are_not_leaks():
+    """Costco's gold memo lost two drafts to "Item 7" and "53-week"."""
+    passages = [Passage(id="P1", item="Item 7", text="Fiscal 2023 was a 53-week year. " * 10,
+                        ticker="COST", accession="acc")]
+    draft = "Item 7 notes that fiscal 2026 was a 53-week year [P1]."
+    assert find_problems(draft, METRICS, passages=passages) == []
+    # A term the filing doesn't use is still a leak, and so is a measurement.
+    assert find_problems("It was a 54-week year.", METRICS, passages=passages)
+    assert find_problems("Item 7 shows 4.5-point growth.", METRICS, passages=passages)

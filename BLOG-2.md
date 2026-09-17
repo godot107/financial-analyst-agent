@@ -157,8 +157,20 @@ The paid level asks ten questions through the whole workflow and grades:
 - whether a memo was published, and on the first draft;
 - wording the memo must or must not contain, such as no "Microsoft 365" in a liquidity memo.
 
-It costs about $0.60, and **I haven't run it yet**. So the prompt fixes above are untested against
-Claude. The next run will show whether first drafts now pass or pay for a retry.
+The first run scored **33 of 36, for $0.52**. Nine of ten memos passed on the first draft,
+including the Microsoft liquidity memo that started all this, now without a word about Microsoft 365.
+
+The three failures were all instructive:
+- **Costco's leverage memo gave up after three drafts.** The digit check rejected two of them for
+  "Item 7" and "53-week", a section name and a term quoted straight from the filing. My own check
+  was too strict and cost two retries.
+- **The third Costco draft was rightly rejected.** It said the filing "notes only" that debt and
+  leases were outstanding, and the passage it cited also listed purchase obligations. The writer
+  was citing a passage to describe what the filing *doesn't* say, which is the dismissive-citation
+  problem again in a milder form. Saying the filing doesn't explain something now needs no citation.
+- **The Apple failure was my grader.** The memo correctly said interest coverage "cannot be
+  computed", and the grader was looking for the words "not available". The same memo also found a
+  rendering bug: a change of 0.003x printed as "rose 0.00x to 0.67x".
 
 ## What it cost
 
@@ -166,7 +178,7 @@ Claude. The next run will show whether first drafts now pass or pay for a retry.
 |---|---|
 | Live memos on Lambda for this round | one, $0.0453 |
 | Everything else here: signing, tracing, coverage, gold figures | $0 in model calls |
-| Gold set, paid level (not yet run) | ~$0.60 |
+| Gold set, paid level (10 questions) | $0.52 |
 
 Most of this round's work never called a model. The failures were in retrieval, extraction and
 checking, and finding them took reading, not spending.
