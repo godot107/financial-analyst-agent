@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from fin_analyst.edgar import Fact, fetch_facts, load_facts, select_facts
+from fin_analyst.edgar import Fact, describe_filing, fetch_facts, load_facts, select_facts
 
 FIXTURE = Path(__file__).parent / "fixtures" / "msft_facts.json"
 
@@ -195,3 +195,25 @@ def test_the_fiscal_year_comes_from_the_date_not_the_filing_s_label():
         ]
     )
     assert by_item(select_facts(df, "acc"), "revenue")[2024].value == 254.0
+
+
+def test_a_filing_is_described_from_its_index_entry_alone():
+    """No download: only what the latest-10-K lookup already returned."""
+    from types import SimpleNamespace
+
+    class IndexEntry:
+        cik, company, form = 789019, "MICROSOFT CORP", "10-K"
+        filing_date, accession_no = "2026-07-30", "0001193125-26-323660"
+
+        @property
+        def period_of_report(self):
+            raise AssertionError("this property downloads the whole submission")
+
+    company = lambda ticker: SimpleNamespace(
+        get_filings=lambda form: SimpleNamespace(latest=lambda: IndexEntry())
+    )
+    filing = describe_filing("msft", identity="Test test@example.com", company=company)
+
+    assert filing.ticker == "MSFT" and filing.company == "MICROSOFT CORP" and filing.cik == 789019
+    assert filing.filed == "2026-07-30" and filing.period is None
+    assert filing.url == "https://www.sec.gov/Archives/edgar/data/789019/0001193125-26-323660-index.html"

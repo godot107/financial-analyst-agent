@@ -33,9 +33,10 @@ from fin_analyst.config import Settings
 from fin_analyst.cache import code_version, memo_key
 from fin_analyst.coverage import concerns, line_item_coverage, metric_coverage
 from fin_analyst.edgar import fetch_facts, latest_accession
-from fin_analyst.graph import RUNS, run_analysis
+from fin_analyst.graph import RUNS, AnalysisState, run_analysis
 from fin_analyst.jobs import Job, JobStore, next_reset
 from fin_analyst.market import fetch_quote
+from fin_analyst.memo import CITATION, format_value
 from fin_analyst.news import fetch_news
 from fin_analyst.passages import fetch_passages
 from fin_analyst.trace import Tracer, json_lines, pretty
@@ -56,6 +57,9 @@ class MemoRequest(BaseModel):
     # Return an earlier memo instead of writing a new one, if the filings, the
     # question, the options and the code are all unchanged. Free when it hits.
     reuse: bool = False
+    # Add every line item read from the filing to the result. Off by default:
+    # there are dozens, and the metrics already carry the inputs they used.
+    include_facts: bool = False
 
     def estimate_usd(self) -> float:
         return ESTIMATE_PER_MEMO if (self.text or self.verify) else ESTIMATE_RATIOS_ONLY
@@ -77,6 +81,41 @@ class Accepted(BaseModel):
     estimate_usd: float
 
 
+def structured_result(state: AnalysisState) -> dict:
+    """What a program needs from a memo without parsing the Markdown.
+
+    Every value here is the one the memo rendered: the same metrics, the same
+    passages, the same filing.
+    """
+
+    def metrics(results):
+        return [{**m.model_dump(), "formatted": format_value(m)} for m in results]
+
+    cited = set(CITATION.findall(state.drafts[-1])) if state.memo else set()
+    return {
+        "filing": state.filing.model_dump() if state.filing else None,
+        "peer_filing": state.peer_filing.model_dump() if state.peer_filing else None,
+        "metric_ids": state.metric_ids,
+        "metrics": metrics(state.metrics),
+        "peer_metrics": metrics(state.peer_metrics),
+        # Every passage the writer was given; `cited` marks the ones the memo uses.
+        "passages": [{**p.model_dump(), "cited": p.id in cited} for p in state.passages],
+        "claim_checks": [check.model_dump() for check in state.claim_checks],
+        "drafts": len(state.drafts),
+        "facts": [f.model_dump() for f in state.facts],
+        "peer_facts": [f.model_dump() for f in state.peer_facts],
+        # Every step, with Claude's summarized thinking: how the memo was reached.
+        "trace": [event.model_dump() for event in state.trace],
+    }
+
+
+def shown(result: dict, request: MemoRequest) -> dict:
+    """The result as this request asked for it: facts only when include_facts is set."""
+    if request.include_facts:
+        return result
+    return {k: v for k, v in result.items() if k not in ("facts", "peer_facts")}
+
+
 class Worker:
     """Runs queued jobs one at a time. A job that fails is recorded, never raised."""
 
@@ -93,6 +132,7 @@ class Worker:
         cache=None,
         lookup_accession=latest_accession,
         trace_log: str | None = None,
+        describe=None,
     ):
         # "json": one JSON line per trace event on stdout (CloudWatch on Lambda);
         # "pretty": readable lines on stderr; None: kept in the job result only.
@@ -110,6 +150,9 @@ class Worker:
         self.fetch_text = fetch_text
         self.fetch_news = fetch_news
         self.quote = quote
+        # Who filed the 10-K and when (edgar.describe_filing). None in tests,
+        # where nothing may reach the SEC; server.py and Lambda pass the real one.
+        self.describe = describe
 
     def process_next(self) -> Job | None:
         """Run the oldest queued job, if there is one, and record how it ended."""
@@ -160,7 +203,8 @@ class Worker:
             return None  # can't pin the filings, so can't safely reuse
         if self._code_version is None:
             self._code_version = code_version()
-        options = request.model_dump(exclude={"reuse"})
+        # include_facts changes what is shown, not the memo, so it isn't part of the key.
+        options = request.model_dump(exclude={"reuse", "include_facts"})
         # News and prices change daily, so a memo using them is only good for the day.
         day = date.today().isoformat() if (request.news or request.market) else None
         return memo_key(options, accessions, self._code_version, day)
@@ -176,7 +220,7 @@ class Worker:
                 "done",
                 cost_usd=0.0,
                 memo=cached["memo"],
-                result={**cached["result"], "reused_from": cached["job_id"]},
+                result={**shown(cached["result"], request), "reused_from": cached["job_id"]},
             )
             return
 
@@ -195,21 +239,17 @@ class Worker:
             quote=self.quote if request.market else None,
             fetch_news=self.fetch_news if request.news else None,
             tracer=Tracer(sinks),
+            describe=self.describe,
         )
-        result = {
-            "metric_ids": state.metric_ids,
-            "drafts": len(state.drafts),
-            "claim_checks": [check.model_dump() for check in state.claim_checks],
-            # Every step, with Claude's summarized thinking: how the memo was reached.
-            "trace": [event.model_dump() for event in state.trace],
-        }
+        # Kept whole in the cache, facts included, so a reuse can still ask for them.
+        result = structured_result(state)
         self.store.finish(
             job.id,
             "done" if state.memo else "failed",
             # The analyst's own counter includes calls whose replies were rejected.
             cost_usd=getattr(analyst, "spent_usd", state.cost_usd),
             memo=state.memo,
-            result=result,
+            result=shown(result, request),
             error=state.error,
         )
         # Every published memo is kept, whether or not this request wanted reuse,
@@ -230,6 +270,7 @@ class Worker:
             fetch=self.fetch,
             fetch_text=self.fetch_text if request.text else None,
             max_usd_total=request.max_usd,
+            describe=self.describe,
         )
         answered = sum(1 for item in items if item.memo_file)
         self.store.finish(

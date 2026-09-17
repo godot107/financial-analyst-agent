@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from fin_analyst.cache import LocalCache
 from fin_analyst.config import PROJECT_ROOT, load_settings
-from fin_analyst.edgar import fetch_facts
+from fin_analyst.edgar import describe_filing, fetch_facts
 from fin_analyst.graph import RUNS
 from fin_analyst.jobs import JobStore
 from fin_analyst.llm import ClaudeAnalyst
@@ -59,6 +59,7 @@ def main() -> int:
         fetch_news=partial(fetch_news, cache=cache),
         quote=partial(fetch_quote, cache=cache),
         cache=cache,
+        describe=describe_filing,
         trace_log="pretty",  # each job's steps and thinking, in this terminal
     )
     app = create_app(store, settings, keys, worker, run_worker=True)

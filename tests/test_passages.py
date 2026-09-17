@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from fin_analyst.passages import MIN_CHARS, Passage, load_passages, search, split_passages, stem
+from fin_analyst.passages import (
+    MIN_CHARS, Passage, load_passages, name_words, search, split_passages, stem,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "msft_passages.json"
 
@@ -74,3 +76,25 @@ def test_a_passage_sharing_no_words_with_the_question_is_not_returned():
 
 def test_nothing_to_search_is_not_an_error():
     assert search([], "anything?") == []
+
+
+# --- the company's own name ------------------------------------------------
+
+
+def test_liquid_finds_liquidity_and_liabilities_find_a_liability():
+    assert stem("liquid") == stem("liquidity")
+    assert stem("liabilities") == stem("liability")
+
+
+def test_the_company_name_is_left_out_of_the_search(msft):
+    """The first live memo on Lambda: "How liquid is Microsoft?" retrieved three
+    Microsoft 365 revenue paragraphs, and the writer cited two to dismiss them."""
+    top = search(msft, "How liquid is Microsoft?", 4, name_words("MICROSOFT CORP"))
+    assert top[0].text.startswith("Cash, cash equivalents, and short-term investments")
+    assert not any("Microsoft 365" in p.text[:40] for p in top)
+
+
+def test_name_words_drop_legal_words_and_never_the_ticker():
+    """COST is Costco's ticker, and "costs" is a word a question needs."""
+    assert name_words("COSTCO WHOLESALE CORP /NEW/") == {"costco", "wholesal"}
+    assert name_words(None) == set()

@@ -98,7 +98,12 @@ def stem(word: str) -> str:
     outranks the one that explains them.
     """
     word = word.removesuffix("'s")
-    for suffix, keep in (("ing", 5), ("ed", 4), ("es", 4), ("s", 3), ("e", 4)):
+    # "-ity" and "-ities" too, so "liquid" finds "liquidity" and "liabilities"
+    # finds "liability". Without it, "How liquid is Microsoft?" matched only
+    # one liquidity paragraph and filled the rest with Microsoft 365 revenue.
+    for suffix, keep in (
+        ("ities", 7), ("ity", 6), ("ing", 5), ("ed", 4), ("es", 4), ("s", 3), ("e", 4)
+    ):
         if word.endswith(suffix) and len(word) > keep:
             return word[: -len(suffix)]
     return word
@@ -124,13 +129,34 @@ def _phrase_bonus(query_tokens: list[str], passage_tokens: list[str]) -> float:
     return sum(pair in passage_pairs for pair in pairs) / len(pairs)
 
 
-def search(passages: list[Passage], query: str, k: int = 4) -> list[Passage]:
-    """The k passages that best match the question, best first."""
+# Words in a registered name that say what kind of entity it is, not which one.
+LEGAL_WORDS = {"corp", "corporation", "inc", "incorporated", "co", "company", "ltd", "limited",
+               "plc", "llc", "lp", "sa", "nv", "ag", "holding", "group", "the", "new", "de"}
+
+
+def name_words(company: str | None) -> set[str]:
+    """The words that name the company, to leave out of a search of its own filing.
+
+    Every question names the company and so does much of the filing, so the name
+    matches paragraphs for no reason: "How liquid is Microsoft?" retrieved three
+    paragraphs about Microsoft 365 revenue. The ticker is not included: tickers
+    are often ordinary words (COST, NOW), and "costs" matters in a question.
+    """
+    return set(tokenize(company or "")) - {stem(w) for w in LEGAL_WORDS}
+
+
+def search(
+    passages: list[Passage], query: str, k: int = 4, ignore: set[str] = frozenset()
+) -> list[Passage]:
+    """The k passages that best match the question, best first.
+
+    `ignore` holds words to leave out of the question, such as the company's name.
+    """
     if not passages:
         return []
     documents = [tokenize(p.text) for p in passages]
     index = BM25Okapi(documents)
-    query_tokens = tokenize(query, drop_stopwords=True)
+    query_tokens = [t for t in tokenize(query, drop_stopwords=True) if t not in ignore]
     if not query_tokens:
         return []
 

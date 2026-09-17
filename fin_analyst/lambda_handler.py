@@ -21,7 +21,7 @@ from functools import partial
 
 from fin_analyst.cache import S3Cache
 from fin_analyst.config import load_settings
-from fin_analyst.edgar import fetch_facts
+from fin_analyst.edgar import describe_filing, fetch_facts
 from fin_analyst.jobs import S3JobStore
 from fin_analyst.market import fetch_quote
 from fin_analyst.news import fetch_news
@@ -86,6 +86,7 @@ def build(ssm=None, s3=None, lambda_client=None, analyst_factory=None, worker_kw
         "fetch_text": partial(fetch_passages, cache=cache),
         "fetch_news": partial(fetch_news, cache=cache),
         "quote": partial(fetch_quote, cache=cache),
+        "describe": describe_filing,
         "cache": cache,
     }
     worker = Worker(

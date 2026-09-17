@@ -8,7 +8,7 @@ from functools import partial
 
 from fin_analyst.cache import LocalCache, NoCache
 from fin_analyst.config import PROJECT_ROOT, load_settings
-from fin_analyst.edgar import fetch_facts
+from fin_analyst.edgar import describe_filing, fetch_facts
 from fin_analyst.graph import run_analysis
 from fin_analyst.market import fetch_quote
 from fin_analyst.news import fetch_news
@@ -132,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
             else None
         ),
         tracer=tracer,
+        describe=describe_filing,
     )
     show(state, analyst)
     return 0 if state.memo else 1
@@ -152,7 +153,8 @@ def run_chat(ticker, question, analyst, settings, peer=None, fetch_text=None, tr
     from fin_analyst.chat import ChatSession
 
     chat = ChatSession(
-        ticker, analyst, settings, peer_ticker=peer, fetch_text=fetch_text, tracer=tracer
+        ticker, analyst, settings, peer_ticker=peer, fetch_text=fetch_text, tracer=tracer,
+        describe=describe_filing,
     )
     answered = 0
 

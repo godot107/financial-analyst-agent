@@ -32,6 +32,7 @@ class ChatSession:
         peer_ticker: str | None = None,
         fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
         tracer: Tracer | None = None,
+        describe=None,
     ):
         self.tracer = tracer
         self.ticker = ticker.upper()
@@ -43,6 +44,7 @@ class ChatSession:
         # you are asking about it.
         self.facts = fetch(self.ticker)
         self.peer_facts = fetch(self.peer_ticker) if self.peer_ticker else []
+        self.describe = describe  # a cheap index lookup, so each turn repeats it
         # The narrative is fetched once as well; each turn searches it again for
         # the passages that bear on that question.
         self.passages = fetch_text(self.ticker) if fetch_text else []
@@ -72,6 +74,7 @@ class ChatSession:
             history=self.history,
             cost_so_far=self.spent_usd,
             tracer=self.tracer,
+            describe=self.describe,
         )
 
         self.spent_usd = state.cost_usd

@@ -43,7 +43,7 @@ def test_a_clean_draft_has_no_problems():
 )
 def test_numbers_the_model_typed_are_caught(draft):
     problems = find_problems(draft, METRICS)
-    assert problems and "wrote yourself" in problems[0]
+    assert any("wrote yourself" in p for p in problems)
 
 
 @pytest.mark.parametrize(
@@ -178,7 +178,7 @@ def test_measurements_are_still_caught_even_when_the_passage_contains_them(leak)
     a currency symbol or a percent sign."""
     passages = [filing_passage(f"Gross margin increased {leak} driven by Azure.")]
     problems = find_problems(f"Gross margin increased {leak} [P1].", METRICS, (), passages)
-    assert problems and "wrote yourself" in problems[0]
+    assert any("wrote yourself" in p for p in problems)
 
 
 def test_a_number_not_in_the_filing_is_still_a_leak():
@@ -257,3 +257,53 @@ def test_a_change_placeholder_opening_a_clause_is_caught(draft):
 def test_a_change_placeholder_with_a_subject_is_fine():
     assert find_problems("The current ratio {{current_ratio:2025->2026}}.", METRICS) == []
     assert find_problems("- Net margin {{roe:2025->2026}}, the largest mover.", METRICS) == []
+
+
+# --- saying a value twice, and rules of thumb in words ---------------------
+
+
+def test_a_change_followed_by_its_own_end_value_is_caught():
+    """The first live memo on Lambda: "fell 0.12x to 1.23x, leaving it at 1.23x"."""
+    draft = "The current ratio {{current_ratio:2025->2026}}, leaving it at {{current_ratio:2026}}."
+    problems = find_problems(draft, METRICS)
+    assert any("says it twice" in p for p in problems)
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        # The level in its own sentence is a separate point, not a repeat.
+        "The current ratio {{current_ratio:2025->2026}}. At {{current_ratio:2026}}, it is the lowest shown.",
+        # The earlier year's level is not repeated by the change.
+        "The current ratio, {{current_ratio:2025}} a year earlier, {{current_ratio:2025->2026}}.",
+    ],
+)
+def test_a_level_that_is_not_a_repeat_is_fine(draft):
+    assert not any("says it twice" in p for p in find_problems(draft, METRICS))
+
+
+@pytest.mark.parametrize(
+    "draft, phrase",
+    [
+        ("The quick ratio no longer covers near-term obligations.", "no longer covers"),
+        ("The current ratio moved from below to above parity.", "above parity"),
+        ("Liquidity remains adequate.", "adequate"),
+        ("It is comfortably liquid on an operating-cash basis.", "comfortably"),
+    ],
+)
+def test_a_rule_of_thumb_in_words_is_caught(draft, phrase):
+    problems = find_problems(draft, METRICS)
+    assert any(f'"{phrase}" judges a ratio' in p for p in problems)
+
+
+def test_management_s_own_verdict_may_be_cited():
+    """In a cited sentence it is the filing's claim, and the claim check reads it."""
+    passages = [Passage(id="P1", item="Item 7", text="Cash is adequate for our needs." * 10,
+                        ticker="MSFT", accession="acc")]
+    draft = "Management considers its cash adequate for its needs [P1]."
+    assert not any("judges a ratio" in p for p in find_problems(draft, METRICS, passages=passages))
+
+
+def test_describing_what_a_ratio_measures_is_not_a_rule_of_thumb():
+    draft = "The current ratio (can current assets cover the next year's bills?) {{current_ratio:2025->2026}}."
+    assert find_problems(draft, METRICS) == []

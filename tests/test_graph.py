@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from fin_analyst.config import load_settings
-from fin_analyst.edgar import load_facts
+from fin_analyst.edgar import Filing, load_facts
 from fin_analyst.graph import AnalysisState, run_analysis
 from fin_analyst.passages import load_passages, search
 
@@ -425,3 +425,49 @@ def test_a_broken_sink_does_not_break_the_run(settings, facts, tmp_path):
 
     state = run(FakeAnalyst([CLEAN_DRAFT]), settings, facts, tmp_path, tracer=Tracer([broken]))
     assert state.memo is not None
+
+
+# --- which filing ------------------------------------------------------------
+
+
+def msft_filing(accession="0001193125-26-323660"):
+    return Filing(
+        ticker="MSFT", company="MICROSOFT CORP", cik=789019, form="10-K", accession=accession,
+        filed="2026-07-30", url=f"https://www.sec.gov/Archives/edgar/data/789019/{accession}-index.html",
+    )
+
+
+def test_the_filing_is_described_and_dated_from_the_facts(settings, facts, tmp_path):
+    state = run(FakeAnalyst([CLEAN_DRAFT]), settings, facts, tmp_path, describe=lambda t: msft_filing())
+
+    assert state.filing.company == "MICROSOFT CORP"
+    assert state.filing.period == "2026-06-30"  # the latest balance sheet date
+    assert json.loads(records_in(tmp_path)[0].read_text())["filing"]["filed"] == "2026-07-30"
+
+
+def test_details_of_a_different_filing_are_dropped_not_trusted(settings, facts, tmp_path):
+    """A new 10-K landing between the two lookups must not relabel the numbers."""
+    state = run(
+        FakeAnalyst([CLEAN_DRAFT]), settings, facts, tmp_path,
+        describe=lambda t: msft_filing("0001193125-27-000001"),
+    )
+    assert state.memo and state.filing is None
+    assert any(e.event == "no filing details" for e in state.trace)
+
+
+def test_a_failed_description_costs_only_the_description(settings, facts, tmp_path):
+    def broken(ticker):
+        raise ConnectionError("EDGAR is down")
+
+    state = run(FakeAnalyst([CLEAN_DRAFT]), settings, facts, tmp_path, describe=broken)
+    assert state.memo and state.filing is None
+
+
+def test_retrieval_leaves_the_company_name_out(settings, facts, tmp_path):
+    everything = load_passages(PASSAGES_FIXTURE)
+    analyst = FakeAnalyst([CLEAN_DRAFT])
+    run(
+        analyst, settings, facts, tmp_path, question="How liquid is Microsoft?",
+        fetch_text=lambda t: everything, describe=lambda t: msft_filing(),
+    )
+    assert not any("Microsoft 365" in p.text[:40] for p in analyst.passages_seen[0])

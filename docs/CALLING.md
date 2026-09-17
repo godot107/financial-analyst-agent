@@ -45,6 +45,47 @@ It finds the URL and your API key, and signs with the `fin-analyst` profile:
 A memo costs about $0.05. Add `"reuse": true` to get an earlier identical memo for $0.00 if
 the filing hasn't changed.
 
+## What a finished job returns
+
+`GET /v1/memos/{id}` returns the memo as Markdown in `memo`, and the same content as data in
+`result`, so a program never has to parse the memo:
+
+```json
+{
+  "status": "done",
+  "cost_usd": 0.0453,
+  "memo": "# How liquid is Microsoft? ...",
+  "result": {
+    "filing": {"ticker": "MSFT", "company": "MICROSOFT CORP", "cik": 789019, "form": "10-K",
+               "accession": "0001193125-26-323660", "filed": "2026-07-29", "period": "2026-06-30",
+               "url": "https://www.sec.gov/Archives/edgar/data/789019/0001193125-26-323660-index.html"},
+    "peer_filing": null,
+    "metric_ids": ["current_ratio", "quick_ratio", "cash_flow_ratio"],
+    "metrics": [{"metric_id": "current_ratio", "fiscal_year": 2026, "value": 1.2303272619576484, "unit": "ratio",
+                 "formatted": "1.23x", "reason": null,
+                 "inputs": {"current_assets": 207710000000.0, "current_liabilities": 168825000000.0}}],
+    "peer_metrics": [],
+    "passages": [{"id": "P50", "item": "Item 7", "text": "Cash, cash equivalents, ...",
+                  "accession": "0001193125-26-323660", "cited": true}],
+    "claim_checks": [{"claim": "...", "cited": ["P50"], "supported": true, "reason": "..."}],
+    "drafts": 1,
+    "trace": [...]
+  }
+}
+```
+
+(`metrics` and `passages` are cut to one entry each here.)
+
+- `metrics` are the values the memo rendered, with the filing inputs each one used. `value` is
+  `null` with a `reason` when a ratio couldn't be computed. Percent units are fractions
+  (`0.3023` is 30.2%); `formatted` is how the memo shows it.
+- `passages` are everything the writer was given; `cited` marks the ones the memo relies on.
+- `filing` comes from EDGAR's index; `period` is the latest balance sheet date in the facts. It is
+  `null` if the lookup failed, or if it found a different filing from the one the numbers came from.
+- Add `"include_facts": true` to the request for every line item read from the filing (`facts`,
+  `peer_facts`): value, XBRL tag, period, accession, and whether it was reported or counted as 0.
+  It doesn't change the memo, so a reused memo can still return them.
+
 ## 2. curl
 
 curl 7.75+ signs requests itself with `--aws-sigv4`. Pass the credentials through a config file read

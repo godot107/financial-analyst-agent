@@ -46,6 +46,7 @@ def run_batch(
     fetch: Callable[[str], list[Fact]] = fetch_facts,
     fetch_text: Callable[[str], list[Passage]] | None = fetch_passages,
     max_usd_total: float | None = None,
+    describe=None,
 ) -> list[BatchItem]:
     """A memo per ticker, plus a summary. Failures are recorded, not raised."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +63,7 @@ def run_batch(
         try:
             state = run_analysis(
                 ticker, question, analyst, settings,
-                fetch=fetch, runs_dir=out_dir, fetch_text=fetch_text,
+                fetch=fetch, runs_dir=out_dir, fetch_text=fetch_text, describe=describe,
             )
         except Exception as failed:  # a bad ticker must not end the batch
             items.append(BatchItem(ticker=ticker, error=f"{type(failed).__name__}: {failed}"))

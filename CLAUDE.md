@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 235 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 255 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -46,6 +46,9 @@ Project-local `.venv`. Runs locally, or on AWS Lambda via `deploy/` (no Bedrock:
 - **Ratio definitions follow the textbooks cited in `PLAN.md` Step 2.** Use parent-only net
   income and equity. Quick ratio = (cash + short-term investments + receivables) / current
   liabilities. Debt = the sum of the debt lines, never total liabilities.
+- **The API result is data, not just Markdown:** filing details, metrics with their inputs,
+  passages marked cited, claim checks, trace (`service.structured_result`). A program reads
+  those; nobody should parse the memo.
 - **Every run saves a JSON run record in `runs/`**, even when no memo is produced. It includes the
   trace (`fin_analyst/trace.py`): each node's output and timing, and each Claude call's tokens, cost
   and summarized thinking. A sink that fails must never fail the run.

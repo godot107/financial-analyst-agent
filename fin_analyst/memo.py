@@ -68,7 +68,7 @@ def _results_by_key(metrics: list[MetricResult]) -> dict[tuple[str, int], Metric
     return {(m.metric_id, m.fiscal_year): m for m in metrics}
 
 
-def _format_value(result: MetricResult) -> str:
+def format_value(result: MetricResult) -> str:
     if result.value is None:
         return f"not available ({result.reason})"
     if result.unit == "percent":
@@ -90,9 +90,9 @@ def _format_change(start: MetricResult, end: MetricResult) -> str:
         size = f"{abs(change):.2f}x"
 
     if abs(change) < 1e-9:
-        return f"was unchanged at {_format_value(end)}"
+        return f"was unchanged at {format_value(end)}"
     direction = "rose" if change > 0 else "fell"
-    return f"{direction} {size} to {_format_value(end)}"
+    return f"{direction} {size} to {format_value(end)}"
 
 
 def find_problems(
@@ -127,6 +127,9 @@ def find_problems(
             '("fell 0.12x to 1.23x"), so it needs a subject in front of it'
         )
 
+    problems.extend(_repeated_values(draft))
+    problems.extend(_rules_of_thumb(draft))
+
     known = {p.id for p in passages}
     for cited in dict.fromkeys(CITATION.findall(draft)):
         if cited not in known:
@@ -135,6 +138,67 @@ def find_problems(
             )
 
     problems.extend(_leaked_digits(draft, list(metrics) + list(peer_metrics), passages))
+    return problems
+
+
+def _sentences(draft: str) -> list[str]:
+    """Sentences and list items; placeholders contain no sentence punctuation."""
+    return [s for s in re.split(r"(?<=[.!?])\s+|\n+", draft) if s.strip()]
+
+
+def _repeated_values(draft: str) -> list[str]:
+    """A change followed by its own end value: "fell 0.12x to 1.23x, leaving it at 1.23x".
+
+    The change placeholder already ends on the value, so the second one only
+    repeats it. The prompt showed exactly this as a bad example, and the first
+    live memo on Lambda did it anyway, so it is checked rather than asked for.
+    """
+    problems = []
+    for sentence in _sentences(draft):
+        levels = {(m.group(1) or "", m.group(2), m.group(3)) for m in PLACEHOLDER.finditer(sentence) if not m.group(4)}
+        for m in PLACEHOLDER.finditer(sentence):
+            prefix, metric_id, end = m.group(1) or "", m.group(2), m.group(4)
+            if end and (prefix, metric_id, end) in levels:
+                problems.append(
+                    f"{m.group(0)} already ends on the {end} value, so "
+                    f"{{{{{prefix}{metric_id}:{end}}}}} in the same sentence says it twice; remove one"
+                )
+    return problems
+
+
+# Judging a ratio against a benchmark the data doesn't contain: "above parity",
+# "no longer covers its obligations", "adequate". The digit check catches
+# "above 2x"; these are the same judgment written in words.
+RULE_OF_THUMB = [
+    re.compile(
+        r"\b(?:above|below|under|over|less than|more than|greater than|at least|short of)\s+"
+        r"(?:one|two|three|parity|unity)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:no longer|not|fails? to|unable to|cannot|can't|does not|doesn't|fully|more than|"
+        r"less than|barely|easily)\s+(?:fully\s+)?cover(?:s|ed|ing)?\b",
+        re.IGNORECASE,
+    ),
+]
+# Verdicts that need a standard to mean anything. Allowed in a sentence that
+# cites a passage, where they are management's words and the claim check reads them.
+VERDICT_WORDS = re.compile(
+    r"\b(?:healthy|unhealthy|adequate|inadequate|comfortable|comfortably)\b", re.IGNORECASE
+)
+
+
+def _rules_of_thumb(draft: str) -> list[str]:
+    problems = []
+    for sentence in _sentences(draft):
+        found = [m.group(0) for pattern in RULE_OF_THUMB for m in pattern.finditer(sentence)]
+        if not CITATION.search(sentence):
+            found += [m.group(0) for m in VERDICT_WORDS.finditer(sentence)]
+        for phrase in dict.fromkeys(found):
+            problems.append(
+                f'"{phrase}" judges a ratio against a standard the data does not contain; '
+                "describe the change against the prior year instead"
+            )
     return problems
 
 
@@ -203,7 +267,7 @@ def render(
         metric_id, start_year, end_year = match.group(2), int(match.group(3)), match.group(4)
         if end_year:
             return _format_change(results[(metric_id, start_year)], results[(metric_id, int(end_year))])
-        return _format_value(results[(metric_id, start_year)])
+        return format_value(results[(metric_id, start_year)])
 
     memo = PLACEHOLDER.sub(replace, DOUBLED_VERB.sub(r"\1", draft))
     sources = build_sources(memo, passages)

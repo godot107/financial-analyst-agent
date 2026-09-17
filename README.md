@@ -254,6 +254,14 @@ test:
   paragraph.
 - **Testing that fix** found that with few passages, BM25 gives common terms negative weight, so
   filtering on a positive score returned nothing at all.
+- **Reading the first trace from Lambda** found four things every check had passed. The company's
+  name in the question pulled three Microsoft 365 revenue paragraphs into a liquidity memo, and
+  "liquid" didn't match "liquidity". The writer cited two of those paragraphs only to dismiss them,
+  and the claim checker accepted that. It repeated values the prompt had shown as a bad example.
+  It also judged a ratio in words ("no longer covers near-term obligations") where the digit check
+  can't see a rule of thumb. The search now leaves out the company name, the checker catches
+  repeats and rule-of-thumb wording, and the claim checker rejects citations used only to dismiss.
+  Re-checking the earlier memos that passed found the same wording in four of them.
 
 ## Reading further
 

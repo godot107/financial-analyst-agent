@@ -11,7 +11,10 @@ from fin_analyst.edgar import load_facts
 from fin_analyst.jobs import JobStore
 from fin_analyst.server import parse_keys
 from fin_analyst.service import Worker, create_app
-from tests.test_graph import CLEAN_DRAFT, FIXTURE, LEAKY_DRAFT, FakeAnalyst
+from fin_analyst.passages import load_passages, search
+from tests.test_graph import (
+    CLEAN_DRAFT, FIXTURE, LEAKY_DRAFT, PASSAGES_FIXTURE, FakeAnalyst, msft_filing,
+)
 
 FACTS = load_facts(FIXTURE)
 BOT = {"X-API-Key": "b" * 24}
@@ -22,7 +25,10 @@ MEMO = {"ticker": "MSFT", "question": "How liquid is it?"}
 class Service:
     """An app, its store and its worker, with a record of every analyst built."""
 
-    def __init__(self, tmp_path, drafts=(CLEAN_DRAFT,), per_key=1.0, global_cap=3.0, fetch=None):
+    def __init__(
+        self, tmp_path, drafts=(CLEAN_DRAFT,), per_key=1.0, global_cap=3.0, fetch=None,
+        describe=None, fetch_text=None,
+    ):
         self.settings = dataclasses.replace(
             load_settings(), api_per_key_daily_usd=per_key, api_global_daily_usd=global_cap
         )
@@ -36,9 +42,10 @@ class Service:
             analyst_factory=self._analyst,
             runs_dir=tmp_path / "runs",
             fetch=fetch,
-            fetch_text=lambda ticker: [],
+            fetch_text=fetch_text or (lambda ticker: []),
             fetch_news=lambda ticker: [],
             quote=None,
+            describe=describe,
         )
         app = create_app(
             self.store, self.settings, {"bot": "b" * 24, "willie": "w" * 24}, self.worker,
@@ -77,6 +84,40 @@ def test_a_memo_is_accepted_at_once_and_collected_later(service):
     assert job["cost_usd"] > 0
     assert job["result"]["metric_ids"] == ["current_ratio"]
     assert [e["step"] for e in job["result"]["trace"]][:2] == ["run", "plan"]
+
+
+def test_the_result_carries_the_filing_metrics_and_passages_as_data(tmp_path):
+    """A program reads the numbers from here instead of parsing the memo."""
+    passages = load_passages(PASSAGES_FIXTURE)
+    cited = search(passages, "How liquid is it?", 4)[0].id
+    service = Service(
+        tmp_path,
+        drafts=[f"Cash fell [{cited}]: the current ratio {{{{current_ratio:2025->2026}}}}."],
+        describe=lambda ticker: msft_filing(),
+        fetch_text=lambda ticker: passages,
+    )
+    job_id = service.client.post("/v1/memos", json=MEMO, headers=BOT).json()["id"]
+    service.worker.process_next()
+    result = service.client.get(f"/v1/memos/{job_id}", headers=BOT).json()["result"]
+
+    assert result["filing"]["accession"] == "0001193125-26-323660"
+    assert result["filing"]["period"] == "2026-06-30"
+    latest = next(m for m in result["metrics"] if m["fiscal_year"] == 2026)
+    assert latest["metric_id"] == "current_ratio" and latest["formatted"] == "1.23x"
+    assert latest["inputs"]["current_assets"] > 0
+    assert [p["id"] for p in result["passages"] if p["cited"]] == [cited]
+    assert "facts" not in result, "facts only when asked for"
+
+
+def test_facts_are_included_when_asked_for(service):
+    job_id = service.client.post(
+        "/v1/memos", json={**MEMO, "include_facts": True}, headers=BOT
+    ).json()["id"]
+    service.worker.process_next()
+    result = service.client.get(f"/v1/memos/{job_id}", headers=BOT).json()["result"]
+
+    assert len(result["facts"]) == len(FACTS)
+    assert {"line_item", "concept", "period", "accession"} <= set(result["facts"][0])
 
 
 def test_a_memo_that_fails_closed_is_a_result_not_a_server_error(tmp_path):

@@ -244,6 +244,16 @@ def test_asking_again_with_reuse_costs_nothing(tmp_path):
     assert second.result["reused_from"] == first.id
 
 
+def test_a_reused_memo_can_still_show_its_facts(tmp_path):
+    """include_facts changes what is shown, not the memo, so it shares the cache entry."""
+    setup = Setup(tmp_path)
+    setup.run()
+    again = setup.run(reuse=True, include_facts=True)
+
+    assert again.result["reused_from"] and again.cost_usd == 0.0
+    assert len(again.result["facts"]) == len(FACTS)
+
+
 def test_without_reuse_a_fresh_memo_is_written(tmp_path):
     setup = Setup(tmp_path)
     setup.run()

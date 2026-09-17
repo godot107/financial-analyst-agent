@@ -21,11 +21,11 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from fin_analyst.config import Settings
-from fin_analyst.edgar import Fact, fetch_facts
+from fin_analyst.edgar import Fact, Filing, fetch_facts
 from fin_analyst.memo import build_footer, cited_claims, find_problems, render
 from fin_analyst.market import MarketDataUnavailable, fetch_quote, price_fact
 from fin_analyst.metrics import MARKET_METRIC_IDS, METRICS_BY_ID, MetricResult, compute_all
-from fin_analyst.passages import Passage, fetch_passages, search
+from fin_analyst.passages import Passage, fetch_passages, name_words, search
 from fin_analyst.trace import TraceEvent, Tracer
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
@@ -49,6 +49,10 @@ class AnalysisState(BaseModel):
     # way and reach the writer as {{peer.metric:year}} placeholders.
     peer_ticker: str | None = None
     metric_ids: list[str] = Field(default_factory=list)  # plan
+    # fetch: which filing, when a describer was given; None when it wasn't, or
+    # when it named a different filing from the one the facts came from.
+    filing: Filing | None = None
+    peer_filing: Filing | None = None
     facts: list[Fact] = Field(default_factory=list)  # fetch
     peer_facts: list[Fact] = Field(default_factory=list)
     metrics: list[MetricResult] = Field(default_factory=list)  # compute
@@ -113,6 +117,7 @@ def build_graph(
     fetch_news: Callable[[str], list[Passage]] | None = None,
     news_k: int = 3,
     tracer: Tracer | None = None,
+    describe: Callable[[str], Filing] | None = None,
 ):
     """Wire the six nodes. Nothing here talks to a model except through `analyst`."""
     tracer = tracer or Tracer()
@@ -149,13 +154,32 @@ def build_graph(
                 print(f"  (no market data: {unavailable})")
                 tracer.emit("fetch", "no market data", reason=str(unavailable))
 
-        update = {"facts": facts}
+        update = {"facts": facts, "filing": describe_one(state.ticker, facts)}
         if state.peer_ticker:
             peer_facts = fetch(state.peer_ticker)
             if not peer_facts:
                 raise ValueError(f"no facts found in the latest 10-K for {state.peer_ticker}")
             update["peer_facts"] = peer_facts
+            update["peer_filing"] = describe_one(state.peer_ticker, peer_facts)
         return update
+
+    def describe_one(ticker: str, facts: list[Fact]) -> Filing | None:
+        """Who filed the facts, and when. Nice to have, so never fatal."""
+        if describe is None:
+            return None
+        try:
+            filing = describe(ticker)
+        except Exception as failed:
+            tracer.emit("fetch", "no filing details", ticker=ticker, reason=str(failed))
+            return None
+        # A separate lookup of "the latest 10-K": if a new one landed in between,
+        # these details would describe a filing the numbers didn't come from.
+        if filing.accession not in {f.accession for f in facts}:
+            tracer.emit("fetch", "no filing details", ticker=ticker,
+                        reason=f"{filing.accession} is not the filing the facts came from")
+            return None
+        periods = [f.period for f in facts if f.line_item == "total_assets"]
+        return filing.model_copy(update={"period": max(periods, default=None)})
 
     def compute(state: AnalysisState) -> dict:
         return {
@@ -170,12 +194,15 @@ def build_graph(
         for a comparison the ratios already carry.
         """
         passages = []
+        # The company's own name is in the question and all over its filing, so
+        # it matches paragraphs for no reason. Search without it.
+        ignore = name_words(state.filing.company if state.filing else None)
         if fetch_text:
-            passages += search(fetch_text(state.ticker), state.question, passages_k)
+            passages += search(fetch_text(state.ticker), state.question, passages_k, ignore)
         if fetch_news:
             # Anything after the filing's year end, cited the same way and held
             # to the same rules: words only, and every claim carries its source.
-            passages += search(fetch_news(state.ticker), state.question, news_k)
+            passages += search(fetch_news(state.ticker), state.question, news_k, ignore)
         return {"passages": passages}
 
     def write(state: AnalysisState) -> dict:
@@ -321,7 +348,9 @@ def summarize(name: str, state: AnalysisState, update: dict) -> dict:
         return {"metric_ids": update["metric_ids"]}
     if name == "fetch":
         years = sorted({f.fiscal_year for f in update["facts"]})
+        filing = update.get("filing")
         return {
+            "filing": f"{filing.company} {filing.form} filed {filing.filed} ({filing.accession})" if filing else None,
             "facts": len(update["facts"]),
             "fiscal_years": years,
             "peer_facts": len(update.get("peer_facts", [])) or None,
@@ -371,11 +400,13 @@ def run_analysis(
     quote: Callable[[str], object] | None = None,
     fetch_news: Callable[[str], list[Passage]] | None = None,
     tracer: Tracer | None = None,
+    describe: Callable[[str], Filing] | None = None,
 ) -> AnalysisState:
     """Run the workflow and save what happened, memo or no memo.
 
     `history` and `cost_so_far` carry a --chat session across turns, so the
     budget guard covers the whole conversation rather than each turn separately.
+    `describe` looks up who filed the 10-K and when (`edgar.describe_filing`).
     """
     state = AnalysisState(
         ticker=ticker.upper(),
@@ -395,7 +426,7 @@ def run_analysis(
     )
     graph = build_graph(
         analyst, settings, fetch, fetch_text, verify=verify, quote=quote, fetch_news=fetch_news,
-        tracer=tracer,
+        tracer=tracer, describe=describe,
     )
 
     try:

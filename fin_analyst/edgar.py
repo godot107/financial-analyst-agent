@@ -34,6 +34,25 @@ class Fact(BaseModel):
 FactList = TypeAdapter(list[Fact])
 
 
+class Filing(BaseModel):
+    """Which filing the facts came from, for a caller that wants more than an accession number.
+
+    Everything here comes from the EDGAR filing index, which is fetched anyway to
+    find the latest 10-K, so describing a filing downloads nothing extra.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    company: str  # as registered with the SEC, e.g. "MICROSOFT CORP"
+    cik: int
+    form: str  # "10-K"
+    accession: str
+    filed: str  # the date the SEC accepted it
+    period: str | None = None  # the balance sheet date, added from the facts
+    url: str  # the filing's index page on sec.gov
+
+
 # Candidate XBRL tags per line item, best first. Companies tag the same idea
 # differently, so we try each in turn and record which one matched.
 BALANCE_SHEET_ITEMS = {
@@ -211,6 +230,22 @@ def latest_10k(ticker: str, identity: str | None = None, company=Company):
     """The company's most recent 10-K. A cheap lookup: metadata, not the filing."""
     identify(identity)
     return company(ticker).get_filings(form="10-K").latest()
+
+
+def describe_filing(ticker: str, identity: str | None = None, company=Company) -> Filing:
+    """The latest 10-K's index entry: who filed it, when, and where to read it."""
+    filing = latest_10k(ticker, identity, company)
+    return Filing(
+        ticker=ticker.upper(),
+        company=filing.company,
+        cik=int(filing.cik),
+        form=filing.form,
+        accession=filing.accession_no,
+        filed=str(filing.filing_date),
+        # Built from the cik and accession, not `filing.period_of_report`,
+        # which downloads the whole submission to read one date.
+        url=f"https://www.sec.gov/Archives/edgar/data/{int(filing.cik)}/{filing.accession_no}-index.html",
+    )
 
 
 def latest_accession(ticker: str, identity: str | None = None, company=Company) -> str:
