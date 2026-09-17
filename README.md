@@ -48,7 +48,7 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | Batch of two (MSFT, COST) | both answered first try | $0.0615 |
 | Memo with citations + claim check | 1 draft, 3 claims checked, all supported | $0.0429 |
 | **Claim-check grading**, 8 hand-labelled cases | **8/8 agreed** | $0.0167 |
-| **Gold set, figures**: 4 companies incl. a bank, checked against the 10-Ks' text | **57/57** | $0 |
+| **Gold set, figures**: 5 companies incl. a bank and an insurer, checked against the 10-Ks' text | **77/77** | $0 |
 | **Gold set, questions**: 10 through the whole workflow | **33/36**; 9/10 memos on the first draft | $0.5199 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
@@ -67,7 +67,8 @@ python evals/claim_check.py   # ~$0.02
 ```
 
 **The gold set** (`evals/gold.yaml`) holds figures found by hand in the text of four 10-Ks
-(Microsoft, Costco, Apple, JPMorgan), each with the line it came from, and ten questions. The free
+(Microsoft, Costco, Apple, JPMorgan, Travelers), each with the line it came from, and twelve
+questions. The free
 level checks extraction and every ratio formula against those figures, plus what must be refused
 (Costco has no gross profit line, Apple no interest expense, JPMorgan no current/non-current
 split). The paid level runs the questions and grades the plan, the memo, whether the first draft
@@ -250,10 +251,17 @@ and token ceilings are set per node in `config.yaml`.
   market-to-book and EV/revenue, computed from the filing's diluted share count and a current
   price. That mixes a price from today with a fiscal year's figures, which the footer says
   explicitly. Alpha Vantage's *fundamentals* are deliberately unused: no accession number.
-- **Banks and insurers** (no current/non-current split) get return on equity and the equity
-  multiplier. Liquidity, debt and interest coverage ratios say they don't apply: the debt tags this
-  tool reads found a sliver of JPMorgan's borrowing (0.18x debt to equity) and next to none of Travelers' (0.00x).
-  Bank-specific measures (net interest margin, capital ratios) aren't built.
+- **Banks and insurers** (no current/non-current split) get their own ratios: a bank's efficiency
+  ratio, loans to deposits, credit cost to loans and net interest income over average assets; an
+  insurer's claims and underwriting costs against premiums earned. Liquidity, debt and interest
+  coverage ratios say they don't apply: the debt tags this tool reads found a sliver of JPMorgan's
+  borrowing (0.18x debt to equity) and next to none of Travelers' (0.00x).
+- **Two bank and insurer measures are deliberately missing.** Regulatory capital (Tier 1, CET1) is
+  tagged per legal entity, which this tool drops along with every other segment breakdown. And an
+  insurer's headline **combined ratio** is a statutory measure: Travelers reports 89.9% where the
+  income statement gives 92.5%, because its ratios adjust for fee income and use written rather
+  than earned premiums. Rather than publish a number 2-3 points off the one in the filing, the
+  ratios here are named for what they are (`claims_to_premiums`, `underwriting_cost_to_premiums`).
 - **Interest coverage needs an interest expense line.** Apple stopped reporting one after FY2023, so
   its latest years show as unavailable rather than ending quietly at 2023.
 - **Retailers that don't tag gross profit** (Costco) get no gross margin rather than a derived one.

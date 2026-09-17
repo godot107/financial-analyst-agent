@@ -40,7 +40,7 @@ FactList = TypeAdapter(list[Fact])
 # Part of the cache key for extracted facts. A filing never changes, but what we
 # extract from it does: bump this when line items are added or tags change, or a
 # cached filing keeps answering without the new lines.
-EXTRACTION_VERSION = "v2"  # v2: operating income, interest expense, leases
+EXTRACTION_VERSION = "v3"  # v3: bank and insurer lines
 
 
 class Filing(BaseModel):
@@ -85,6 +85,14 @@ BALANCE_SHEET_ITEMS = {
         "us-gaap:ReceivablesNetCurrent",
         "us-gaap:AccountsAndOtherReceivablesNetCurrent",
     ],
+    # Banks: what they lend and what they owe depositors. No bank reports current
+    # assets, so these are the lines its ratios are built from instead.
+    "loans": [
+        "us-gaap:FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLoss",
+        "us-gaap:LoansAndLeasesReceivableNetReportedAmount",
+        "us-gaap:NotesReceivableNet",
+    ],
+    "deposits": ["us-gaap:Deposits"],
     # Parent-company equity: the same owners as net income below.
     "equity": ["us-gaap:StockholdersEquity"],
     "short_term_borrowings": [
@@ -123,6 +131,24 @@ INCOME_AND_CASH_FLOW_ITEMS = {
     ],
     # Parent-company net income. ProfitLoss would include minority interests.
     "net_income": ["us-gaap:NetIncomeLoss"],
+    # Banks: interest earned less interest paid, and the fee side of the business.
+    "net_interest_income": ["us-gaap:InterestIncomeExpenseNet"],
+    "noninterest_income": ["us-gaap:NoninterestIncome"],
+    "noninterest_expense": ["us-gaap:NoninterestExpense"],
+    "credit_loss_provision": [
+        "us-gaap:ProvisionForLoanLeaseAndOtherLosses",
+        "us-gaap:ProvisionForLoanAndLeaseLosses",
+    ],
+    # Insurers: what they earned in premiums, and what claims and selling those
+    # policies cost. Their own "loss ratio" and "combined ratio" are statutory
+    # measures with adjustments these tags can't reproduce.
+    "premiums_earned": ["us-gaap:PremiumsEarnedNet"],
+    "claims_incurred": [
+        "us-gaap:PolicyholderBenefitsAndClaimsIncurredNet",
+        "us-gaap:IncurredClaimsPropertyCasualtyAndLiability",
+    ],
+    "policy_acquisition_costs": ["us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense"],
+    "selling_general_admin": ["us-gaap:SellingGeneralAndAdministrativeExpense"],
     "operating_cash_flow": [
         "us-gaap:NetCashProvidedByUsedInOperatingActivities",
         "us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",

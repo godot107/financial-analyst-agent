@@ -69,10 +69,29 @@ companies:
       net_income:   {value: 57_048,    evidence: "Net income $ 57,048 $ 58,471 $ 49,552"}
       total_assets: {value: 4_424_900, evidence: "Total assets 4,424,900 4,002,814 3,875,393"}
       equity:       {value: 362_438,   evidence: "Total stockholders’ equity 362,438 344,758 327,878"}
+      net_interest_income:   {value: 95_443,    evidence: "Net interest income 95,443 92,583 89,267"}
+      noninterest_income:    {value: 87_004,    evidence: "Noninterest revenue 87,004 84,973 68,837"}
+      noninterest_expense:   {value: 95_640,    evidence: "Noninterest expense was $95.6 billion, up 4% (Item 7); 95,640 in the income statement"}
+      credit_loss_provision: {value: 14_212,    evidence: "Provision for credit losses 14,212 10,678 9,320"}
+      loans:                 {value: 1_467_664, evidence: "Loans, net of allowance for loan losses 1,467,664"}
+      deposits:              {value: 2_559_320, evidence: "Deposits 2,559,320 2,406,032 2,400,688"}
     unavailable:
       current_ratio: "banks and insurers"
       debt_to_equity: "banks and insurers"
       interest_coverage: "banks and insurers"
+  TRV:
+    accession: 0000086312-26-000065
+    year: 2025
+    facts:
+      net_income:               {value: 6_288,   evidence: "Net income $ 6,288 $ 4,999 $ 2,991"}
+      equity:                   {value: 32_894,  evidence: "Total shareholders’ equity 32,894 27,864"}
+      premiums_earned:          {value: 43_914,  evidence: "Premiums $ 43,914 $ 41,941 $ 37,761"}
+      claims_incurred:          {value: 27_221,  evidence: "Claims and claim adjustment expenses 27,221 27,059 26,215"}
+      policy_acquisition_costs: {value: 7_266,   evidence: "Amortization of deferred acquisition costs 7,266 6,973 6,226"}
+      selling_general_admin:    {value: 6_120,   evidence: "General and administrative expenses 6,120 5,819 5,176"}
+    unavailable:
+      current_ratio: "banks and insurers"
+      efficiency_ratio: "net_interest_income"  # an insurer has no interest margin
 
 # Ratios to check against the gold facts above, per company. Each is recomputed
 # from those hand-checked figures, so a wrong tag or formula shows up here.
@@ -84,6 +103,11 @@ ratios:
   debt_to_equity_with_leases: [AAPL]
   roe: [MSFT, COST, AAPL, JPM]
   equity_multiplier: [JPM]
+  efficiency_ratio: [JPM]
+  loans_to_deposits: [JPM]
+  credit_cost_to_loans: [JPM]
+  claims_to_premiums: [TRV]
+  underwriting_cost_to_premiums: [TRV]
 
 # Questions for the full run. Each grades the plan (which ratios were chosen), the
 # memo's existence, retries, the claim checks, and what the memo must or must not say.
@@ -124,3 +148,9 @@ questions:
   - ticker: JPM
     question: What return on equity does JPMorgan earn?
     choose_any: [[roe, roe_average_equity]]
+  - ticker: JPM
+    question: How efficiently does JPMorgan run its banking business, and how much of its deposits does it lend out?
+    choose_any: [[efficiency_ratio], [loans_to_deposits]]
+  - ticker: TRV
+    question: How profitable was Travelers' underwriting last year?
+    choose_any: [[claims_to_premiums, underwriting_cost_to_premiums]]

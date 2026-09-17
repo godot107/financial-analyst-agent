@@ -472,7 +472,11 @@ Pick from these based on what Iteration 1 taught:
 - ✅ **Averages and solvency:** `roe_average_equity` (Subramanyam), `interest_coverage` (EBIT over
   interest, B&D §2.6), `debt_to_capital` (B&D eq. 2.16), `operating_margin`.
 - ✅ **Banks and insurers:** an unclassified balance sheet makes liquidity, debt and interest
-  ratios "doesn't apply" rather than wrong. Bank-specific ratios (NIM, capital) are not built.
+  ratios "doesn't apply" rather than wrong, and they get their own: `efficiency_ratio`,
+  `loans_to_deposits`, `credit_cost_to_loans`, `net_interest_to_assets` (a named proxy: filings
+  don't tag average earning assets), `claims_to_premiums`, `underwriting_cost_to_premiums`.
+  Regulatory capital is tagged per entity, so it is out of reach; the statutory combined ratio is
+  deliberately not reproduced.
 - Publish: public repo, blog post
 
 ## Iteration 3 (planned): serve it as an API

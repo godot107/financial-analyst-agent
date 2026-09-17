@@ -213,6 +213,57 @@ METRICS: tuple[Metric, ...] = (
         denominator_must_be_positive=True,
         averaged=("equity",),
     ),
+    # --- banks and insurers, whose statements have none of the lines above ---
+    Metric(
+        id="net_interest_to_assets",
+        description="a bank's net interest income over its average total assets: what the lending spread earns on the balance sheet (the reported net interest margin uses average earning assets, which filings do not tag, so this runs a little lower)",
+        unit="percent",
+        inputs=("net_interest_income", "total_assets"),
+        denominator="total_assets",
+        formula=lambda v: v["net_interest_income"] / v["total_assets"],
+        denominator_must_be_positive=True,
+        averaged=("total_assets",),
+    ),
+    Metric(
+        id="efficiency_ratio",
+        description="a bank's noninterest expense over its net interest income plus noninterest income: what it costs to earn a dollar of revenue, so lower is better",
+        unit="percent",
+        inputs=("noninterest_expense", "net_interest_income", "noninterest_income"),
+        denominator="net_interest_income",
+        formula=lambda v: v["noninterest_expense"] / (v["net_interest_income"] + v["noninterest_income"]),
+    ),
+    Metric(
+        id="loans_to_deposits",
+        description="a bank's loans over its deposits: how much of the deposit base is lent out",
+        unit="ratio",
+        inputs=("loans", "deposits"),
+        denominator="deposits",
+        formula=lambda v: v["loans"] / v["deposits"],
+    ),
+    Metric(
+        id="credit_cost_to_loans",
+        description="a bank's provision for credit losses over its loans: the year's credit cost against the book it was taken on",
+        unit="percent",
+        inputs=("credit_loss_provision", "loans"),
+        denominator="loans",
+        formula=lambda v: v["credit_loss_provision"] / v["loans"],
+    ),
+    Metric(
+        id="claims_to_premiums",
+        description="an insurer's claims and claim adjustment expenses over its net premiums earned, from the income statement: not the company's reported loss ratio, which is a statutory measure with adjustments these figures cannot reproduce",
+        unit="percent",
+        inputs=("claims_incurred", "premiums_earned"),
+        denominator="premiums_earned",
+        formula=lambda v: v["claims_incurred"] / v["premiums_earned"],
+    ),
+    Metric(
+        id="underwriting_cost_to_premiums",
+        description="an insurer's policy acquisition costs and selling, general and administrative expense over its net premiums earned, from the income statement: not the company's reported underwriting expense ratio, which is a statutory measure",
+        unit="percent",
+        inputs=("policy_acquisition_costs", "selling_general_admin", "premiums_earned"),
+        denominator="premiums_earned",
+        formula=lambda v: (v["policy_acquisition_costs"] + v["selling_general_admin"]) / v["premiums_earned"],
+    ),
     Metric(
         id="pe_ratio",
         description="market value of the company over its net income: what the market pays for a dollar of earnings (price is current, earnings are the fiscal year's)",
@@ -255,6 +306,7 @@ BALANCE_INPUTS = {
     "total_assets", "current_assets", "current_liabilities", "cash", "short_term_investments",
     "accounts_receivable", "equity", "short_term_borrowings", "current_long_term_debt",
     "long_term_debt", "operating_lease_liabilities", "finance_lease_liabilities",
+    "loans", "deposits",
 }
 # Ratios that need a share price, which no filing contains.
 MARKET_METRIC_IDS = {m.id for m in METRICS if "share_price" in m.inputs}

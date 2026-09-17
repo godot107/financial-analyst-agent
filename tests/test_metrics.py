@@ -246,3 +246,45 @@ def test_a_bank_still_gets_the_ratios_that_do_fit():
     results = compute_all(bank(), ["roe", "equity_multiplier"])
     assert only(results, "roe").value == pytest.approx(50 / 300)
     assert only(results, "equity_multiplier").value == pytest.approx(4_000 / 300)
+
+
+# --- the ratios banks and insurers do have -------------------------------
+
+# JPMorgan's FY2025 10-K, $ millions.
+JPM = dict(total_assets=4_424_900, equity=362_438, net_income=57_048,
+           net_interest_income=95_443, noninterest_income=87_004, noninterest_expense=95_640,
+           credit_loss_provision=14_212, loans=1_467_664, deposits=2_559_320)
+# Travelers' FY2025 10-K, $ millions.
+TRV = dict(total_assets=143_708, equity=32_894, net_income=6_288, premiums_earned=43_914,
+           claims_incurred=27_221, policy_acquisition_costs=7_266, selling_general_admin=6_120)
+
+
+def test_a_bank_gets_the_ratios_its_statements_support():
+    results = compute_all(facts(**JPM), ["efficiency_ratio", "loans_to_deposits", "credit_cost_to_loans"])
+    assert only(results, "efficiency_ratio").value == pytest.approx(95_640 / (95_443 + 87_004))
+    assert only(results, "loans_to_deposits").value == pytest.approx(1_467_664 / 2_559_320)
+    assert only(results, "credit_cost_to_loans").value == pytest.approx(14_212 / 1_467_664)
+
+
+def test_the_interest_margin_proxy_averages_the_balance_sheet_and_says_it_is_a_proxy():
+    last_year = [f.model_copy(update={"fiscal_year": 2025}) for f in facts(total_assets=4_002_814)]
+    results = compute_all(facts(**JPM) + last_year, ["net_interest_to_assets"])
+    result = only(results, "net_interest_to_assets")
+
+    assert result.value == pytest.approx(95_443 / ((4_424_900 + 4_002_814) / 2))
+    assert "earning assets" in METRICS_BY_ID["net_interest_to_assets"].description
+
+
+def test_an_insurer_gets_its_underwriting_ratios():
+    results = compute_all(facts(**TRV), ["claims_to_premiums", "underwriting_cost_to_premiums"])
+    assert only(results, "claims_to_premiums").value == pytest.approx(27_221 / 43_914)
+    assert only(results, "underwriting_cost_to_premiums").value == pytest.approx((7_266 + 6_120) / 43_914)
+
+
+@pytest.mark.parametrize(
+    "metric_id, company",
+    [("efficiency_ratio", TRV), ("claims_to_premiums", JPM), ("loans_to_deposits", TRV)],
+)
+def test_a_ratio_for_the_other_kind_of_company_is_unavailable(metric_id, company):
+    result = only(compute_all(facts(revenue=100, **company), [metric_id]), metric_id)
+    assert result.value is None and "the filing has no" in result.reason
