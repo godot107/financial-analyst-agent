@@ -280,13 +280,14 @@ test:
   It also judged a ratio in words ("no longer covers near-term obligations") where the digit check
   can't see a rule of thumb. The search now leaves out the company name, the checker catches
   repeats and rule-of-thumb wording, and the claim checker rejects citations used only to dismiss.
-  Re-checking the earlier memos that passed found the same wording in four of them.
+  Re-checking the twelve earlier memos that passed found the same problems in three of them.
 
 ## Reading further
 
 - [`QUICKSTART.md`](QUICKSTART.md) — setup, every command, what each costs, and what the errors mean
 - [`examples/`](examples/) — a real memo and its full run record, including a rejected draft
 - [`BLOG.md`](BLOG.md) — why it is built this way, and what the checks caught
+- [`BLOG-2.md`](BLOG-2.md) — deploying it, reading its first trace, and what that trace caught
 - [`PLAN.md`](PLAN.md) — the build spec, step by step, and what is still unbuilt
 - [`CLAUDE.md`](CLAUDE.md) — the invariants, for anyone (or any agent) changing the code
 
