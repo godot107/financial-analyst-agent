@@ -76,8 +76,8 @@ nine memos passed on the first draft, and the tenth (Costco leverage over three 
 after three. Two drafts were lost to the digit check flagging "Item 7" and "53-week", both quoted
 from the filing. The third was rightly rejected: it cited a passage to say what the filing "notes
 only", and the passage said more. The Apple check failed on the grader, not the memo, which said
-"cannot be computed" where the grader wanted "not available". All four are fixed; the run hasn't
-been repeated.
+"cannot be computed" where the grader wanted "not available". All four are fixed, and re-running
+the Costco and Apple questions scored 7/7 and 7/7 ($0.17), every memo on its first draft.
 
 **The claim checker is itself graded**, because AI judges err too (Huyen Ch. 4). Eight claims are
 paired with real passages and labelled by hand, and the hard cases are not opposites but claims

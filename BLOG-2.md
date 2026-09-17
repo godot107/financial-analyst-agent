@@ -172,6 +172,9 @@ The three failures were all instructive:
   computed", and the grader was looking for the words "not available". The same memo also found a
   rendering bug: a change of 0.003x printed as "rose 0.00x to 0.67x".
 
+After the fixes, re-running the Costco and Apple questions scored 14 of 14 for $0.17, every memo on
+its first draft, and Apple's cash flow ratio now reads "was unchanged at 0.67x".
+
 ## What it cost
 
 | | |
