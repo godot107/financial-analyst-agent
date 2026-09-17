@@ -48,6 +48,7 @@ This is a deliberately fixed workflow, not an autonomous agent: it trades freedo
 | Batch of two (MSFT, COST) | both answered first try | $0.0615 |
 | Memo with citations + claim check | 1 draft, 3 claims checked, all supported | $0.0429 |
 | **Claim-check grading**, 8 hand-labelled cases | **8/8 agreed** | $0.0167 |
+| **Gold set, figures**: 4 companies incl. a bank, checked against the 10-Ks' text | **57/57** | $0 |
 
 **The trend-flip test is the one that matters.** Claude has seen Microsoft's real financials in
 training, so a memo that reads well may be memory rather than retrieval. Placeholders already
@@ -57,10 +58,19 @@ improved. It wrote "profitability fell in fiscal 2026", and every directional se
 the altered data.
 
 ```bash
+python evals/gold.py --free   # $0: figures and ratios vs the filings' own text
+python evals/gold.py --spend  # ~$0.60: 10 questions through the whole workflow
 python evals/trend_flip.py    # ~$0.03
 python evals/plan_check.py    # ~$0.07
 python evals/claim_check.py   # ~$0.02
 ```
+
+**The gold set** (`evals/gold.yaml`) holds figures found by hand in the text of four 10-Ks
+(Microsoft, Costco, Apple, JPMorgan), each with the line it came from, and ten questions. The free
+level checks extraction and every ratio formula against those figures, plus what must be refused
+(Costco has no gross profit line, Apple no interest expense, JPMorgan no current/non-current
+split). The paid level runs the questions and grades the plan, the memo, whether the first draft
+passed, and wording the memo must or must not contain. The paid level hasn't been run yet.
 
 **The claim checker is itself graded**, because AI judges err too (Huyen Ch. 4). Eight claims are
 paired with real passages and labelled by hand, and the hard cases are not opposites but claims

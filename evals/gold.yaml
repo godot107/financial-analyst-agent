@@ -1,0 +1,124 @@
+# The gold set: questions whose right answers were checked by hand against the 10-Ks.
+#
+# Every figure below was found in the filing's own text (the statements or their
+# notes), not copied from this tool's extraction, and `evidence` quotes the line.
+# Figures are $ millions for the latest fiscal year in that 10-K.
+#
+#   python evals/gold.py --free    # figures and ratios only: SEC data, no model, $0
+#   python evals/gold.py           # the full workflow for every question (~$0.50)
+#
+# Filings (latest 10-K when checked, 2026-09-16):
+#   MSFT 0001193125-26-323660  year ended 2026-06-30
+#   COST 0000909832-25-000101  year ended 2025-08-31
+#   AAPL 0000320193-25-000079  year ended 2025-09-27
+#   JPM  0001628280-26-008131  year ended 2025-12-31
+# A newer 10-K changes the answers: the free run reports that as an accession mismatch.
+
+companies:
+  MSFT:
+    accession: 0001193125-26-323660
+    year: 2026
+    facts:
+      revenue:             {value: 331_839, evidence: "Total revenue 331,839 281,724 245,122"}
+      operating_income:    {value: 155_237, evidence: "Operating income 155,237 128,528 21%"}
+      interest_expense:    {value: 3_051,   evidence: "Interest expense (3,051) (2,385) (2,935)"}
+      net_income:          {value: 133_749, evidence: "Net income $ 133,749 $ 101,832 $ 88,136"}
+      current_assets:      {value: 207_710, evidence: "Total current assets 207,710 191,131"}
+      current_liabilities: {value: 168_825, evidence: "Total current liabilities 168,825 141,218"}
+      equity:              {value: 442_387, evidence: "Total stockholders’ equity 442,387 343,479"}
+      operating_lease_liabilities: {value: 21_925, evidence: "Total operating lease liabilities $ 21,925 $ 22,861"}
+      finance_lease_liabilities:   {value: 66_594, evidence: "Total finance lease liabilities $ 66,594 $ 46,172"}
+    unavailable: {}
+  COST:
+    accession: 0000909832-25-000101
+    year: 2025
+    facts:
+      revenue:             {value: 275_235, evidence: "Total revenue 275,235 254,453 242,290"}
+      operating_income:    {value: 10_383,  evidence: "Operating income 10,383 9,285 8,114"}
+      interest_expense:    {value: 154,     evidence: "Interest expense (154) (169) (160)"}
+      net_income:          {value: 8_099,   evidence: "NET INCOME $ 8,099 $ 7,367 $ 6,292"}
+      current_assets:      {value: 38_380,  evidence: "Total current assets 38,380 34,246"}
+      current_liabilities: {value: 37_108,  evidence: "Total current liabilities 37,108 35,464"}
+      long_term_debt:      {value: 5_713,   evidence: "Long-term debt, excluding current portion 5,713 5,794"}
+      equity:              {value: 29_164,  evidence: "TOTAL EQUITY 29,164 23,622 (no noncontrolling interests)"}
+      operating_lease_liabilities: {value: 2_668, evidence: "lease note: current 208 + long-term 2,460"}
+      finance_lease_liabilities:   {value: 1_479, evidence: "lease note: current 78 + long-term 1,401"}
+    unavailable:
+      gross_margin: "gross_profit"  # Costco doesn't report a gross profit line
+  AAPL:
+    accession: 0000320193-25-000079
+    year: 2025
+    facts:
+      revenue:             {value: 416_161, evidence: "Total net sales 416,161 391,035 383,285"}
+      operating_income:    {value: 133_050, evidence: "Operating income 133,050 123,216 114,301"}
+      net_income:          {value: 112_010, evidence: "Net income $ 112,010 $ 93,736 $ 96,995"}
+      current_assets:      {value: 147_957, evidence: "Total current assets 147,957 152,987"}
+      current_liabilities: {value: 165_631, evidence: "Total current liabilities 165,631 176,392"}
+      short_term_borrowings:  {value: 7_979,  evidence: "Commercial paper 7,979 9,967"}
+      current_long_term_debt: {value: 12_350, evidence: "Term debt (current) 12,350 10,912"}
+      long_term_debt:         {value: 78_328, evidence: "Term debt (non-current) 78,328 85,750"}
+      equity:              {value: 73_733,  evidence: "Total shareholders’ equity 73,733 56,950"}
+      operating_lease_liabilities: {value: 12_490, evidence: "Total lease liabilities $ 12,490 $ 1,230 $ 13,720"}
+      finance_lease_liabilities:   {value: 1_230,  evidence: "Total lease liabilities $ 12,490 $ 1,230 $ 13,720"}
+    unavailable:
+      interest_coverage: "interest_expense"  # no interest expense line after FY2023
+  JPM:
+    accession: 0001628280-26-008131
+    year: 2025
+    facts:
+      net_income:   {value: 57_048,    evidence: "Net income $ 57,048 $ 58,471 $ 49,552"}
+      total_assets: {value: 4_424_900, evidence: "Total assets 4,424,900 4,002,814 3,875,393"}
+      equity:       {value: 362_438,   evidence: "Total stockholders’ equity 362,438 344,758 327,878"}
+    unavailable:
+      current_ratio: "banks and insurers"
+      debt_to_equity: "banks and insurers"
+      interest_coverage: "banks and insurers"
+
+# Ratios to check against the gold facts above, per company. Each is recomputed
+# from those hand-checked figures, so a wrong tag or formula shows up here.
+ratios:
+  current_ratio: [MSFT, COST, AAPL]
+  operating_margin: [MSFT, COST, AAPL]
+  interest_coverage: [MSFT, COST]
+  debt_to_equity: [AAPL]
+  debt_to_equity_with_leases: [AAPL]
+  roe: [MSFT, COST, AAPL, JPM]
+  equity_multiplier: [JPM]
+
+# Questions for the full run. Each grades the plan (which ratios were chosen), the
+# memo's existence, retries, the claim checks, and what the memo must or must not say.
+questions:
+  - ticker: MSFT
+    question: How liquid is Microsoft?
+    choose_any: [[current_ratio, quick_ratio, cash_flow_ratio]]
+    memo_excludes: ["Microsoft 365"]  # the first Lambda memo cited revenue passages here
+  - ticker: MSFT
+    question: How leveraged is Microsoft once leases are counted?
+    choose_any: [[debt_to_equity_with_leases]]
+  - ticker: MSFT
+    question: Can Microsoft cover its interest payments?
+    choose_any: [[interest_coverage]]
+  - ticker: MSFT
+    question: What is driving Microsoft's return on equity?
+    choose_any: [[roe, roe_average_equity], [net_margin], [asset_turnover], [equity_multiplier]]
+  - ticker: COST
+    question: How liquid is Costco?
+    choose_any: [[current_ratio, quick_ratio, cash_flow_ratio]]
+  - ticker: COST
+    question: How has Costco's leverage changed over the last few years, counting leases?
+    filings: 3
+    choose_any: [[debt_to_equity_with_leases]]
+    min_years: 4  # three 10-Ks carry four balance sheets
+  - ticker: AAPL
+    question: Can Apple cover its interest expense?
+    choose_any: [[interest_coverage]]
+    memo_includes_any: ["not available"]  # latest years have no interest expense line
+  - ticker: AAPL
+    question: How profitable is Apple?
+    choose_any: [[gross_margin, operating_margin, net_margin, roe, roe_average_equity]]
+  - ticker: JPM
+    question: How liquid is JPMorgan?
+    memo_includes_any: ["doesn't apply", "does not apply", "not available"]
+  - ticker: JPM
+    question: What return on equity does JPMorgan earn?
+    choose_any: [[roe, roe_average_equity]]

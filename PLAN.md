@@ -468,7 +468,7 @@ Pick from these based on what Iteration 1 taught:
 - ✅ **Two helpers for repetitive work:** `scripts/coverage.py` (which tags matched, what was
   zero-filled, which ratios that costs — free to run) and `scripts/batch.py` (one question across a
   watchlist, a memo each plus a summary, failures recorded rather than fatal, with a total spend cap).
-- A per-run trace file and more evals (a hand-checked gold set, claim grading)
+- ✅ **Per-run trace** (`fin_analyst/trace.py`) and a **hand-checked gold set** (`evals/gold.py`): 57 figure and ratio checks against four 10-Ks' text ($0), and 10 graded questions (~$0.60, not yet run).
 - ✅ **Averages and solvency:** `roe_average_equity` (Subramanyam), `interest_coverage` (EBIT over
   interest, B&D §2.6), `debt_to_capital` (B&D eq. 2.16), `operating_margin`.
 - ✅ **Banks and insurers:** an unclassified balance sheet makes liquidity, debt and interest
