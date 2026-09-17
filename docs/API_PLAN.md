@@ -1,7 +1,9 @@
 # Plan: serving the analyst as an API
 
-Status: **Phase A complete. Phase B deployed** (2026-09-16, us-east-1; free checks 4/4 via
-`05_verify.sh`; calling it: [`CALLING.md`](CALLING.md)). Phase C planned. Iteration 3. The CLI and batch runner work today; this plans the
+Status: **Phase A complete. Phase B deployed, and kept up to date** (2026-09-16, us-east-1; free checks 4/4 via
+`05_verify.sh`; calling it: [`CALLING.md`](CALLING.md)). A finished job returns the memo as
+Markdown *and* as data — the filing, each ratio with the figures behind it, the passages it cited,
+the claim verdicts and the trace — so a caller never parses prose. Phase C planned. Iteration 3. The CLI and batch runner work today; this plans the
 same workflow behind an HTTP interface so other systems can ask for memos.
 
 ## What the service is, and is not

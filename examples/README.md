@@ -1,4 +1,6 @@
-# An example run, start to finish
+# Two example runs, start to finish
+
+## 1. A memo that took two drafts
 
 Both files come from one real run:
 
@@ -29,3 +31,26 @@ Cost: $0.0863, higher than a typical memo because of the rejected draft.
 
 The filing text quoted here is from Microsoft's public 10-K (accession 0001193125-26-323660), as
 published on SEC EDGAR.
+
+## 2. A company the usual ratios don't fit
+
+```bash
+python -m fin_analyst JPM "How liquid is JPMorgan?"
+```
+
+- **`jpm-liquidity-memo.md`** — what was published: all three liquidity ratios reported as
+  unavailable, with the structural reason, and what the filing does say about liquidity governance
+  instead, each claim cited and checked.
+- **`jpm-liquidity-run.json`** — the same run as data, and this one carries the newer fields: the
+  `filing` it used (company, CIK, form, filing date, period), each metric with the figures behind
+  it, the passages, three claim verdicts, and the full `trace` of 15 events with each Claude call's
+  tokens and cost.
+
+The refusal is the point. Computing those ratios from a bank's tags gave 0.18x debt to equity
+before this was fixed — wrong, and plausible enough to publish. The bank's own ratios (efficiency,
+loans to deposits, credit cost) are computed instead when the question asks for them.
+
+Cost: $0.0491, one draft, from the gold set run on 2026-09-17.
+
+*Footnote: this memo's footer predates a wording fix. It lists lines "treated as zero" where a
+bank simply has none of them; the footer now says so.*

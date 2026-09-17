@@ -12,7 +12,7 @@ Placeholder shapes:
 
 import re
 
-from fin_analyst.metrics import MetricResult
+from fin_analyst.metrics import MetricResult, is_unclassified
 from fin_analyst.news import news_credit
 from fin_analyst.passages import Passage
 
@@ -375,16 +375,30 @@ def build_footer(
     else:
         lines.append("No peer comparison: this memo covers one company against its own prior years.")
 
-    unreported = sorted({f.line_item for f in facts if not f.reported})
-    if unreported:
-        lines.append(f"{ticker} does not report, so treated as zero: {', '.join(unreported)}.")
+    lines.append(_unreported_line(ticker, facts))
     credit = news_credit(passages)
     if credit:
         lines.append(credit)
 
-    peer_unreported = sorted({f.line_item for f in peer_facts if not f.reported})
-    if peer_unreported:
-        lines.append(
-            f"{peer_ticker} does not report, so treated as zero: {', '.join(peer_unreported)}."
+    if peer_ticker:
+        lines.append(_unreported_line(peer_ticker, peer_facts))
+    return "\n".join(line for line in lines if line)
+
+
+def _unreported_line(ticker: str, facts) -> str:
+    """The lines a company doesn't report, which the ratios counted as zero.
+
+    A bank or insurer has none of the current/non-current lines at all, so
+    "does not report, so treated as zero" would read as a finding about the
+    company rather than a fact about its kind of balance sheet.
+    """
+    unreported = sorted({f.line_item for f in facts if not f.reported})
+    if not unreported:
+        return ""
+    if is_unclassified(facts):
+        return (
+            f"{ticker}'s balance sheet is not split into current and non-current, so these lines "
+            f"are absent rather than zero, and the ratios above do not use them: "
+            f"{', '.join(unreported)}."
         )
-    return "\n".join(lines)
+    return f"{ticker} does not report, so treated as zero: {', '.join(unreported)}."

@@ -335,3 +335,17 @@ def test_section_names_and_terms_quoted_from_the_filing_are_not_leaks():
     # A term the filing doesn't use is still a leak, and so is a measurement.
     assert find_problems("It was a 54-week year.", METRICS, passages=passages)
     assert find_problems("Item 7 shows 4.5-point growth.", METRICS, passages=passages)
+
+
+def test_a_bank_s_footer_says_absent_rather_than_zero():
+    """"JPM does not report, so treated as zero: receivables" reads as a finding
+    about the firm; it is a fact about what a bank's balance sheet contains."""
+    def fact(item, value, reported=True):
+        return Fact(line_item=item, fiscal_year=2025, value=value, concept="us-gaap:X" if reported else "",
+                    period="2025-12-31", accession="acc", reported=reported)
+
+    bank = [fact("total_assets", 4_424_900.0), fact("equity", 362_438.0),
+            fact("accounts_receivable", 0.0, reported=False)]
+    footer = build_footer(bank, [result("roe", 2025, 0.157, "percent")], "JPM")
+    assert "absent rather than zero" in footer
+    assert "does not report, so treated as zero" not in footer

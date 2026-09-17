@@ -1,0 +1,349 @@
+{
+  "ticker": "JPM",
+  "question": "How liquid is JPMorgan?",
+  "peer_ticker": null,
+  "metric_ids": [
+    "current_ratio",
+    "quick_ratio",
+    "cash_flow_ratio"
+  ],
+  "filing": {
+    "ticker": "JPM",
+    "company": "JPMORGAN CHASE & CO",
+    "cik": 19617,
+    "sic": 6021,
+    "form": "10-K",
+    "accession": "0001628280-26-008131",
+    "filed": "2026-02-13",
+    "period": "2025-12-31",
+    "url": "https://www.sec.gov/Archives/edgar/data/19617/0001628280-26-008131-index.html"
+  },
+  "peer_filing": null,
+  "metrics": [
+    {
+      "metric_id": "current_ratio",
+      "fiscal_year": 2025,
+      "value": null,
+      "unit": "ratio",
+      "reason": "doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers",
+      "inputs": {}
+    },
+    {
+      "metric_id": "quick_ratio",
+      "fiscal_year": 2025,
+      "value": null,
+      "unit": "ratio",
+      "reason": "doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers",
+      "inputs": {}
+    },
+    {
+      "metric_id": "cash_flow_ratio",
+      "fiscal_year": 2025,
+      "value": null,
+      "unit": "ratio",
+      "reason": "doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers",
+      "inputs": {}
+    }
+  ],
+  "peer_metrics": [],
+  "passages": [
+    {
+      "id": "P251",
+      "item": "Item 7",
+      "text": "The Firm has a Liquidity Risk Management (“LRM”) function whose primary objective is to provide independent oversight of liquidity risk across the Firm. Liquidity Risk Management’s responsibilities include:",
+      "ticker": "JPM",
+      "accession": "0001628280-26-008131",
+      "url": null,
+      "published": null
+    },
+    {
+      "id": "P258",
+      "item": "Item 7",
+      "text": "The Firm’s Contingency Funding Plan (“CFP”) sets out the strategies for addressing and managing liquidity resource needs during a liquidity stress event and incorporates liquidity risk limits, indicators and risk appetite tolerances. The CFP also identifies the alternative contingent funding and liquidity resources available to the Firm and its legal entities in a period of stress.",
+      "ticker": "JPM",
+      "accession": "0001628280-26-008131",
+      "url": null,
+      "published": null
+    },
+    {
+      "id": "P254",
+      "item": "Item 7",
+      "text": "Committees responsible for liquidity governance include the Firmwide ALCO, as well as regional ALCOs, the Treasurer Committee, and the CTC Risk Committee. In addition, the Board Risk Committee reviews and recommends to the Board of Directors, for approval, the Firm’s liquidity risk tolerances, liquidity strategy, and liquidity policy. Refer to Firmwide Risk Management on pages 83–87 for further discussion of ALCO and other risk-related committees.",
+      "ticker": "JPM",
+      "accession": "0001628280-26-008131",
+      "url": null,
+      "published": null
+    },
+    {
+      "id": "P589",
+      "item": "Item 1A",
+      "text": "•Liquidity risks, including the risk that JPMorganChase’s ability to operate could be impaired by constrained liquidity; the dependence of JPMorgan Chase & Co. on its subsidiaries for funding; and the potential adverse effects that any downgrades of JPMorganChase’s credit ratings could have on its liquidity and cost of funding.",
+      "ticker": "JPM",
+      "accession": "0001628280-26-008131",
+      "url": null,
+      "published": null
+    }
+  ],
+  "claim_checks": [
+    {
+      "claim": "It states that an independent Liquidity Risk Management function provides oversight of liquidity risk across the firm [P251], and that liquidity governance runs through the Firmwide and regional ALCOs, the Treasurer Committee and the CTC Risk Committee, with the Board Risk Committee recommending liquidity risk tolerances, strategy and policy to the Board [P254].",
+      "cited": [
+        "P251",
+        "P254"
+      ],
+      "supported": true,
+      "reason": "Both passages state the LRM independent oversight and the governance committees including Board Risk Committee recommendation."
+    },
+    {
+      "claim": "A Contingency Funding Plan sets out strategies and identifies alternative contingent funding and liquidity resources for a stress period [P258].",
+      "cited": [
+        "P258"
+      ],
+      "supported": true,
+      "reason": "Passage states CFP sets out strategies and identifies alternative contingent funding and liquidity resources in a period of stress."
+    },
+    {
+      "claim": "The risk factors flag that operations could be impaired by constrained liquidity, that the parent depends on subsidiaries for funding, and that credit-rating downgrades could affect liquidity and funding cost [P589].",
+      "cited": [
+        "P589"
+      ],
+      "supported": true,
+      "reason": "Passage lists exactly these three liquidity risk factors."
+    }
+  ],
+  "drafts": [
+    "# How liquid is JPMorgan?\n\n**Short answer: the standard liquidity ratios cannot be computed for JPMorgan from this filing, so no ratio-based answer is possible.**\n\n## Why the ratios are missing\n\n- **Current ratio** — current assets over current liabilities, i.e. whether the next year's bills can be covered: {{current_ratio:2025}}\n- **Quick ratio** — the stricter test using cash, short-term investments and receivables against current liabilities: {{quick_ratio:2025}}\n- **Cash flow ratio** — operating cash flow over current liabilities, the liquidity thrown off by the business itself: {{cash_flow_ratio:2025}}\n\nAll three fail for the same structural reason: a bank's balance sheet is not split into current and non-current items, and there is no operating income line. This is a limitation of the data, not a finding about the firm, and there is no substitute measure here — I am not going to improvise one.\n\n## What the filing does say\n\nThe filing describes how liquidity is governed rather than giving a ratio I can reproduce. It states that an independent Liquidity Risk Management function provides oversight of liquidity risk across the firm [P251], and that liquidity governance runs through the Firmwide and regional ALCOs, the Treasurer Committee and the CTC Risk Committee, with the Board Risk Committee recommending liquidity risk tolerances, strategy and policy to the Board [P254]. A Contingency Funding Plan sets out strategies and identifies alternative contingent funding and liquidity resources for a stress period [P258]. The risk factors flag that operations could be impaired by constrained liquidity, that the parent depends on subsidiaries for funding, and that credit-rating downgrades could affect liquidity and funding cost [P589].\n\n## Limits\n\nNo prior-year comparison is possible, since the metrics do not compute in either year. There is no peer or industry comparison in this data — only the company against itself."
+  ],
+  "problems": [],
+  "memo": "# How liquid is JPMorgan?\n\n**Short answer: the standard liquidity ratios cannot be computed for JPMorgan from this filing, so no ratio-based answer is possible.**\n\n## Why the ratios are missing\n\n- **Current ratio** — current assets over current liabilities, i.e. whether the next year's bills can be covered: not available (doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers)\n- **Quick ratio** — the stricter test using cash, short-term investments and receivables against current liabilities: not available (doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers)\n- **Cash flow ratio** — operating cash flow over current liabilities, the liquidity thrown off by the business itself: not available (doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers)\n\nAll three fail for the same structural reason: a bank's balance sheet is not split into current and non-current items, and there is no operating income line. This is a limitation of the data, not a finding about the firm, and there is no substitute measure here — I am not going to improvise one.\n\n## What the filing does say\n\nThe filing describes how liquidity is governed rather than giving a ratio I can reproduce. It states that an independent Liquidity Risk Management function provides oversight of liquidity risk across the firm [P251], and that liquidity governance runs through the Firmwide and regional ALCOs, the Treasurer Committee and the CTC Risk Committee, with the Board Risk Committee recommending liquidity risk tolerances, strategy and policy to the Board [P254]. A Contingency Funding Plan sets out strategies and identifies alternative contingent funding and liquidity resources for a stress period [P258]. The risk factors flag that operations could be impaired by constrained liquidity, that the parent depends on subsidiaries for funding, and that credit-rating downgrades could affect liquidity and funding cost [P589].\n\n## Limits\n\nNo prior-year comparison is possible, since the metrics do not compute in either year. There is no peer or industry comparison in this data — only the company against itself.\n\n**Cited sources**\n- [P251] Item 7, filing 0001628280-26-008131: \"The Firm has a Liquidity Risk Management (“LRM”) function whose primary objective is to provide independent oversight of liquidity risk across the Firm. Liquidity Risk Management’s responsibilities include:\"\n- [P254] Item 7, filing 0001628280-26-008131: \"Committees responsible for liquidity governance include the Firmwide ALCO, as well as regional ALCOs, the Treasurer Committee, and the CTC Risk Committee. In addition, the Board Risk Committee reviews and recommends to t...\"\n- [P258] Item 7, filing 0001628280-26-008131: \"The Firm’s Contingency Funding Plan (“CFP”) sets out the strategies for addressing and managing liquidity resource needs during a liquidity stress event and incorporates liquidity risk limits, indicators and risk appetit...\"\n- [P589] Item 1A, filing 0001628280-26-008131: \"•Liquidity risks, including the risk that JPMorganChase’s ability to operate could be impaired by constrained liquidity; the dependence of JPMorgan Chase & Co. on its subsidiaries for funding; and the potential adverse e...\"\n\n---\nJPM: SEC filing 0001628280-26-008131; balance sheet dates 2025-12-31, 2024-12-31, 2023-12-31.\nRatios use ending balances, not averages. Debt excludes lease liabilities.\nNo peer comparison: this memo covers one company against its own prior years.\nJPM does not report, so treated as zero: accounts_receivable, current_long_term_debt, finance_lease_liabilities, long_term_debt, operating_lease_liabilities, short_term_borrowings, short_term_investments.",
+  "history": [],
+  "cost_usd": 0.04908,
+  "error": null,
+  "trace": [
+    {
+      "at": "2026-09-17T05:02:45.769+00:00",
+      "seconds": 0.0,
+      "step": "run",
+      "event": "start",
+      "data": {
+        "ticker": "JPM",
+        "question": "How liquid is JPMorgan?",
+        "peer": null,
+        "text": true,
+        "verify": true,
+        "news": false,
+        "market": false
+      }
+    },
+    {
+      "at": "2026-09-17T05:02:48.906+00:00",
+      "seconds": 3.137,
+      "step": "claude",
+      "event": "plan",
+      "data": {
+        "model": "claude-opus-5",
+        "effort": "low",
+        "input_tokens": 1470,
+        "output_tokens": 62,
+        "cost_usd": 0.0089,
+        "seconds": 3.13,
+        "stop_reason": "tool_use",
+        "thinking_blocks": 0,
+        "thinking": null,
+        "tool_input": {
+          "metric_ids": [
+            "current_ratio",
+            "quick_ratio",
+            "cash_flow_ratio"
+          ]
+        }
+      }
+    },
+    {
+      "at": "2026-09-17T05:02:48.906+00:00",
+      "seconds": 3.137,
+      "step": "plan",
+      "event": "done",
+      "data": {
+        "seconds": 3.13,
+        "metric_ids": [
+          "current_ratio",
+          "quick_ratio",
+          "cash_flow_ratio"
+        ]
+      }
+    },
+    {
+      "at": "2026-09-17T05:02:58.497+00:00",
+      "seconds": 12.728,
+      "step": "fetch",
+      "event": "done",
+      "data": {
+        "seconds": 9.59,
+        "filing": "JPMORGAN CHASE & CO 10-K filed 2026-02-13 (0001628280-26-008131)",
+        "facts": 45,
+        "fiscal_years": [
+          2022,
+          2023,
+          2024,
+          2025
+        ],
+        "peer_facts": null
+      }
+    },
+    {
+      "at": "2026-09-17T05:02:58.497+00:00",
+      "seconds": 12.729,
+      "step": "compute",
+      "event": "done",
+      "data": {
+        "seconds": 0.0,
+        "values": [
+          "current_ratio:2025 = unavailable (doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers)",
+          "quick_ratio:2025 = unavailable (doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers)",
+          "cash_flow_ratio:2025 = unavailable (doesn't apply: the balance sheet isn't split into current and non-current and there is no operating income line, as is usual for banks and insurers)"
+        ]
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:05.617+00:00",
+      "seconds": 19.848,
+      "step": "retrieve",
+      "event": "done",
+      "data": {
+        "seconds": 7.12,
+        "passages": [
+          "[P251] Item 7: The Firm has a Liquidity Risk Management (“LRM”) function whose primary objective is to provide independent oversight of liquidity risk acro...",
+          "[P258] Item 7: The Firm’s Contingency Funding Plan (“CFP”) sets out the strategies for addressing and managing liquidity resource needs during a liquidity ...",
+          "[P254] Item 7: Committees responsible for liquidity governance include the Firmwide ALCO, as well as regional ALCOs, the Treasurer Committee, and the CTC R...",
+          "[P589] Item 1A: •Liquidity risks, including the risk that JPMorganChase’s ability to operate could be impaired by constrained liquidity; the dependence of J..."
+        ]
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:16.936+00:00",
+      "seconds": 31.167,
+      "step": "claude",
+      "event": "write",
+      "data": {
+        "model": "claude-opus-5",
+        "effort": "medium",
+        "input_tokens": 1900,
+        "output_tokens": 720,
+        "cost_usd": 0.0275,
+        "seconds": 11.32,
+        "stop_reason": "end_turn",
+        "thinking_blocks": 1,
+        "thinking": "I need to explicitly flag that metrics are unavailable with a stated reason, pull governance details from the passages I have, and note that no peer comparison is possible—using the unavailable placeholders directly rather than any numeric figures.",
+        "tool_input": null
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:16.936+00:00",
+      "seconds": 31.167,
+      "step": "write",
+      "event": "done",
+      "data": {
+        "seconds": 11.32,
+        "attempt": 1,
+        "draft": "# How liquid is JPMorgan?\n\n**Short answer: the standard liquidity ratios cannot be computed for JPMorgan from this filing, so no ratio-based answer is possible.**\n\n## Why the ratios are missing\n\n- **Current ratio** — current assets over current liabilities, i.e. whether the next year's bills can be covered: {{current_ratio:2025}}\n- **Quick ratio** — the stricter test using cash, short-term investments and receivables against current liabilities: {{quick_ratio:2025}}\n- **Cash flow ratio** — operating cash flow over current liabilities, the liquidity thrown off by the business itself: {{cash_flow_ratio:2025}}\n\nAll three fail for the same structural reason: a bank's balance sheet is not split into current and non-current items, and there is no operating income line. This is a limitation of the data, not a finding about the firm, and there is no substitute measure here — I am not going to improvise one.\n\n## What the filing does say\n\nThe filing describes how liquidity is governed rather than giving a ratio I can reproduce. It states that an independent Liquidity Risk Management function provides oversight of liquidity risk across the firm [P251], and that liquidity governance runs through the Firmwide and regional ALCOs, the Treasurer Committee and the CTC Risk Committee, with the Board Risk Committee recommending liquidity risk tolerances, strategy and policy to the Board [P254]. A Contingency Funding Plan sets out strategies and identifies alternative contingent funding and liquidity resources for a stress period [P258]. The risk factors flag that operations could be impaired by constrained liquidity, that the parent depends on subsidiaries for funding, and that credit-rating downgrades could affect liquidity and funding cost [P589].\n\n## Limits\n\nNo prior-year comparison is possible, since the metrics do not compute in either year. There is no peer or industry comparison in this data — only the company against itself."
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:16.937+00:00",
+      "seconds": 31.168,
+      "step": "check",
+      "event": "done",
+      "data": {
+        "seconds": 0.0,
+        "problems": []
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:16.937+00:00",
+      "seconds": 31.169,
+      "step": "route",
+      "event": "check -> verify",
+      "data": {
+        "problems": 0
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:20.402+00:00",
+      "seconds": 34.633,
+      "step": "claude",
+      "event": "verify",
+      "data": {
+        "model": "claude-opus-5",
+        "effort": "low",
+        "input_tokens": 1691,
+        "output_tokens": 169,
+        "cost_usd": 0.01268,
+        "seconds": 3.46,
+        "stop_reason": "tool_use",
+        "thinking_blocks": 0,
+        "thinking": null,
+        "tool_input": {
+          "verdicts": [
+            {
+              "supported": true,
+              "reason": "Both passages state the LRM independent oversight and the governance committees including Board Risk Committee recommendation."
+            },
+            {
+              "supported": true,
+              "reason": "Passage states CFP sets out strategies and identifies alternative contingent funding and liquidity resources in a period of stress."
+            },
+            {
+              "supported": true,
+              "reason": "Passage lists exactly these three liquidity risk factors."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:20.402+00:00",
+      "seconds": 34.633,
+      "step": "verify",
+      "event": "done",
+      "data": {
+        "seconds": 3.46,
+        "verdicts": [
+          "supported ['P251', 'P254']: Both passages state the LRM independent oversight and the governance committees including Board Risk Committee recommendation.",
+          "supported ['P258']: Passage states CFP sets out strategies and identifies alternative contingent funding and liquidity resources in a period of stress.",
+          "supported ['P589']: Passage lists exactly these three liquidity risk factors."
+        ]
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:20.402+00:00",
+      "seconds": 34.633,
+      "step": "route",
+      "event": "verify -> render",
+      "data": {
+        "problems": 0
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:20.403+00:00",
+      "seconds": 34.634,
+      "step": "render",
+      "event": "done",
+      "data": {
+        "seconds": 0.0,
+        "memo_chars": 3918
+      }
+    },
+    {
+      "at": "2026-09-17T05:03:20.403+00:00",
+      "seconds": 34.634,
+      "step": "run",
+      "event": "done",
+      "data": {
+        "drafts": 1,
+        "cost_usd": 0.04908,
+        "error": null
+      }
+    }
+  ]
+}

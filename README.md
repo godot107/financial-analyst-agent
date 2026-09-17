@@ -14,7 +14,7 @@ computes every ratio, and fills in every figure. A checker rejects any draft whe
 a number itself, and a second Claude call verifies that each cited explanation is actually in the
 passage it cites.
 
-228 tests, none of which touch the network or need an API key. A memo costs a few cents.
+294 tests, none of which touch the network or need an API key. A memo costs a few cents.
 
 ## How it works
 

@@ -202,7 +202,7 @@ apply" is less satisfying and is the truth.
 ---
 
 *Built with Claude Code. The design decisions, review and evaluation are mine; most of the code is
-model-written. 282 tests, none of which touch the network or an API key. Code:
+model-written. 294 tests, none of which touch the network or an API key. Code:
 [github.com/godot107/financial-analyst-agent](https://github.com/godot107/financial-analyst-agent)*
 
 ---

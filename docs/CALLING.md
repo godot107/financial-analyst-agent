@@ -42,8 +42,19 @@ It finds the URL and your API key, and signs with the `fin-analyst` profile:
 ./deploy/call.sh wait 20260916…                      # polls, then prints the trace and memo
 ```
 
-A memo costs about $0.05. Add `"reuse": true` to get an earlier identical memo for $0.00 if
-the filing hasn't changed.
+A memo costs about $0.05. What a memo request takes:
+
+| Field | Default | What it does |
+|---|---|---|
+| `ticker`, `question` | required | the company, and what to ask about it |
+| `peer` | none | compare against a second company, at each one's own year end |
+| `filings` | 1 | read the latest N 10-Ks (up to 5): each adds a year, and a restated figure is named in the footer |
+| `text` | true | read Item 7 and Item 1A so the memo can cite why a number moved |
+| `verify` | true | ask Claude whether each cited claim is in the passage it cites |
+| `news` | false | add the company's recent 8-K press releases |
+| `market` | false | fetch a share price so P/E and the other valuation ratios work |
+| `include_facts` | false | return every line item read from the filing |
+| `reuse` | false | return an earlier identical memo for $0.00 if the filings and the code are unchanged |
 
 ## What a finished job returns
 

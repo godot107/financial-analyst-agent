@@ -33,7 +33,7 @@ costs a few cents.
 ## 3. Check the setup without spending anything
 
 ```bash
-pytest                                              # 228 tests, no network, no API key
+pytest                                              # 294 tests, no network, no API key
 python -m fin_analyst MSFT "How liquid is it?" --dry-run
 python scripts/coverage.py MSFT                     # reads the filing, calls no model
 ```
