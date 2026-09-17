@@ -245,7 +245,7 @@ and token ceilings are set per node in `config.yaml`.
   explicitly. Alpha Vantage's *fundamentals* are deliberately unused: no accession number.
 - **Banks and insurers** (no current/non-current split) get return on equity and the equity
   multiplier. Liquidity, debt and interest coverage ratios say they don't apply: the debt tags this
-  tool reads found a sliver of JPMorgan's borrowing (0.18x debt to equity) and none of Travelers'.
+  tool reads found a sliver of JPMorgan's borrowing (0.18x debt to equity) and next to none of Travelers' (0.00x).
   Bank-specific measures (net interest margin, capital ratios) aren't built.
 - **Interest coverage needs an interest expense line.** Apple stopped reporting one after FY2023, so
   its latest years show as unavailable rather than ending quietly at 2023.

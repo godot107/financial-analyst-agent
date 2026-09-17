@@ -10,8 +10,8 @@ from production showed me four I hadn't.
 
 ## Putting it behind HTTPS
 
-A memo takes 20–30 seconds. That rules out answering in the request itself: API Gateway gives up at
-30. So the service takes a job and answers straight away with an id. The Lambda function then
+A memo takes anywhere from 20 seconds to over a minute. That rules out answering in the request
+itself: API Gateway gives up at 30. So the service takes a job and answers straight away with an id. The Lambda function then
 invokes itself asynchronously to write the memo, and the caller polls for it. Jobs and cached filings
 live in S3, secrets in SSM Parameter Store, and nothing sensitive is baked into the image.
 
@@ -80,7 +80,7 @@ because it has no digits, and the digit check was the only enforcement.
 
 Then I ran the new checks over the twelve memos that had passed before. Three had the same
 problems: one Costco memo said "above parity", and two Microsoft memos repeated values, one of them
-also calling liquidity "adequate" and "comfortably" held. So these weren't one-off slips. The old
+also calling liquidity "adequate". So these weren't one-off slips. The old
 checks were blind to them.
 
 The fixes, in order of how much I trust them:
@@ -118,9 +118,9 @@ trace did.
 
 **Leases.** Subramanyam treats lease liabilities as the financing they are, so there's now a
 `debt_to_equity_with_leases` variant. Companies tag leases two ways: Microsoft reports only a total,
-while Costco and Apple report current and noncurrent parts. Taking a single tag would have halved
-Costco's liability. With leases, Microsoft's debt to equity goes from 0.09x to 0.29x: it carries
-$66.6 billion of finance leases, mostly data centres.
+while Costco and Apple report current and noncurrent parts. Taking the first tag found would have
+given Costco a lease figure for only one of its two balance sheets. With leases, Microsoft's debt to equity goes from 0.09x to 0.29x: it carries
+$66.6 billion of finance leases, reported outside its debt lines.
 
 **Interest coverage, and a line that stopped existing.** Apple stopped reporting interest expense
 after fiscal 2023. Reading three filings, its interest coverage simply *ended in 2023*. Nothing
@@ -129,7 +129,7 @@ every year of its statement, and a missing line shows as "not available" for tha
 
 **Banks.** JPMorgan came out at **0.18x debt to equity**, and Travelers at **0.00x**. Bank balance
 sheets aren't split into current and noncurrent, so the debt tags this tool reads found a sliver of
-JPMorgan's borrowing and none of Travelers'. Those numbers were wrong and plausible, the worst
+JPMorgan's borrowing and next to none of Travelers'. Those numbers were wrong and plausible, the worst
 combination. Liquidity, debt and interest ratios now say they don't apply to a balance sheet like
 that. Return on equity and the equity multiplier still work.
 
