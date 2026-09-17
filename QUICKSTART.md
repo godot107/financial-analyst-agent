@@ -64,6 +64,18 @@ The price comes from Alpha Vantage; the share count comes from the filing. Their
 deliberately unused — no accession number, so a figure from them could not be traced to a filing.
 Without the key the memo still works; the valuation ratios report themselves unavailable.
 
+## The notebook
+
+A step-by-step walkthrough that costs nothing: recorded filings, recorded drafts, no API key.
+
+```bash
+pip install -r requirements-notebook.txt
+jupyter notebook notebooks/walkthrough.ipynb
+```
+
+It ships with its outputs, so [reading it on GitHub](notebooks/walkthrough.ipynb) needs no setup
+at all. The last cell runs a live memo (~$0.05) and is switched off.
+
 ## Everything else
 
 ```bash

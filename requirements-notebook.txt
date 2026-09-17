@@ -1,0 +1,5 @@
+# For notebooks/walkthrough.ipynb only. Deliberately kept out of requirements.txt,
+# which the Lambda image installs: Jupyter would add ~100 MB to it for nothing.
+#   pip install -r requirements-notebook.txt
+#   jupyter notebook notebooks/walkthrough.ipynb
+jupyter==1.1.1
