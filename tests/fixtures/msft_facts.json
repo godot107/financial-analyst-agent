@@ -6,7 +6,9 @@
     "concept": "us-gaap:AccountsReceivableNetCurrent",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "accounts_receivable",
@@ -15,7 +17,9 @@
     "concept": "us-gaap:AccountsReceivableNetCurrent",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "cash",
@@ -24,7 +28,9 @@
     "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "cash",
@@ -33,7 +39,9 @@
     "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "current_assets",
@@ -42,7 +50,9 @@
     "concept": "us-gaap:AssetsCurrent",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "current_assets",
@@ -51,7 +61,9 @@
     "concept": "us-gaap:AssetsCurrent",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "current_liabilities",
@@ -60,7 +72,9 @@
     "concept": "us-gaap:LiabilitiesCurrent",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "current_liabilities",
@@ -69,7 +83,9 @@
     "concept": "us-gaap:LiabilitiesCurrent",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "current_long_term_debt",
@@ -78,7 +94,9 @@
     "concept": "us-gaap:LongTermDebtCurrent",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "current_long_term_debt",
@@ -87,7 +105,42 @@
     "concept": "us-gaap:LongTermDebtCurrent",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "diluted_shares",
+    "fiscal_year": 2026,
+    "value": 7453000000.0,
+    "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "diluted_shares",
+    "fiscal_year": 2025,
+    "value": 7465000000.0,
+    "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "diluted_shares",
+    "fiscal_year": 2024,
+    "value": 7469000000.0,
+    "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "equity",
@@ -96,7 +149,9 @@
     "concept": "us-gaap:StockholdersEquity",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "equity",
@@ -105,7 +160,9 @@
     "concept": "us-gaap:StockholdersEquity",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "equity",
@@ -114,7 +171,31 @@
     "concept": "us-gaap:StockholdersEquity",
     "period": "2024-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "finance_lease_liabilities",
+    "fiscal_year": 2026,
+    "value": 66594000000.0,
+    "concept": "us-gaap:FinanceLeaseLiability",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "finance_lease_liabilities",
+    "fiscal_year": 2025,
+    "value": 46172000000.0,
+    "concept": "us-gaap:FinanceLeaseLiability",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "gross_profit",
@@ -123,7 +204,9 @@
     "concept": "us-gaap:GrossProfit",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "gross_profit",
@@ -132,7 +215,9 @@
     "concept": "us-gaap:GrossProfit",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "gross_profit",
@@ -141,7 +226,42 @@
     "concept": "us-gaap:GrossProfit",
     "period": "2024-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "interest_expense",
+    "fiscal_year": 2026,
+    "value": 3051000000.0,
+    "concept": "us-gaap:InterestExpenseNonoperating",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "interest_expense",
+    "fiscal_year": 2025,
+    "value": 2385000000.0,
+    "concept": "us-gaap:InterestExpenseNonoperating",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "interest_expense",
+    "fiscal_year": 2024,
+    "value": 2935000000.0,
+    "concept": "us-gaap:InterestExpenseNonoperating",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "liabilities_and_equity",
@@ -150,7 +270,9 @@
     "concept": "us-gaap:LiabilitiesAndStockholdersEquity",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "liabilities_and_equity",
@@ -159,7 +281,9 @@
     "concept": "us-gaap:LiabilitiesAndStockholdersEquity",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "long_term_debt",
@@ -168,7 +292,9 @@
     "concept": "us-gaap:LongTermDebtNoncurrent",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "long_term_debt",
@@ -177,7 +303,9 @@
     "concept": "us-gaap:LongTermDebtNoncurrent",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "net_income",
@@ -186,7 +314,9 @@
     "concept": "us-gaap:NetIncomeLoss",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "net_income",
@@ -195,7 +325,9 @@
     "concept": "us-gaap:NetIncomeLoss",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "net_income",
@@ -204,7 +336,9 @@
     "concept": "us-gaap:NetIncomeLoss",
     "period": "2024-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "operating_cash_flow",
@@ -213,7 +347,9 @@
     "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "operating_cash_flow",
@@ -222,7 +358,9 @@
     "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "operating_cash_flow",
@@ -231,7 +369,64 @@
     "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
     "period": "2024-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "operating_income",
+    "fiscal_year": 2026,
+    "value": 155237000000.0,
+    "concept": "us-gaap:OperatingIncomeLoss",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "operating_income",
+    "fiscal_year": 2025,
+    "value": 128528000000.0,
+    "concept": "us-gaap:OperatingIncomeLoss",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "operating_income",
+    "fiscal_year": 2024,
+    "value": 109433000000.0,
+    "concept": "us-gaap:OperatingIncomeLoss",
+    "period": "2024-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "operating_lease_liabilities",
+    "fiscal_year": 2026,
+    "value": 21925000000.0,
+    "concept": "us-gaap:OperatingLeaseLiability",
+    "period": "2026-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
+  },
+  {
+    "line_item": "operating_lease_liabilities",
+    "fiscal_year": 2025,
+    "value": 22861000000.0,
+    "concept": "us-gaap:OperatingLeaseLiability",
+    "period": "2025-06-30",
+    "accession": "0001193125-26-323660",
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "revenue",
@@ -240,7 +435,9 @@
     "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "revenue",
@@ -249,7 +446,9 @@
     "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "revenue",
@@ -258,7 +457,9 @@
     "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
     "period": "2024-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "short_term_borrowings",
@@ -267,7 +468,9 @@
     "concept": "",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": false
+    "reported": false,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "short_term_borrowings",
@@ -276,7 +479,9 @@
     "concept": "",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": false
+    "reported": false,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "short_term_investments",
@@ -285,7 +490,9 @@
     "concept": "us-gaap:ShortTermInvestments",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "short_term_investments",
@@ -294,7 +501,9 @@
     "concept": "us-gaap:ShortTermInvestments",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "total_assets",
@@ -303,7 +512,9 @@
     "concept": "us-gaap:Assets",
     "period": "2026-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   },
   {
     "line_item": "total_assets",
@@ -312,6 +523,8 @@
     "concept": "us-gaap:Assets",
     "period": "2025-06-30",
     "accession": "0001193125-26-323660",
-    "reported": true
+    "reported": true,
+    "earlier_value": null,
+    "earlier_accession": null
   }
 ]

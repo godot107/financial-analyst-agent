@@ -387,8 +387,11 @@ Pick from these based on what Iteration 1 taught:
   (Subramanyam Ch. 1). Built as `{{peer.metric:year}}` placeholders computed by the same registry;
   each company is shown at its own latest year end, with the mismatch stated in the memo and both
   accession numbers in the footer. Live MSFT vs GOOGL: $0.0624.
-- Multiple years across several filings, with restatement handling
-- Include lease liabilities in debt (Subramanyam Ch. 1), as a labelled variant
+- ✅ **Multiple years across several filings** (`--filings N`, API `"filings"`, 1–5). Each 10-K's
+  facts are cached by accession number; the newest filing's figure wins, and a different
+  first-filed figure is kept on the fact (`earlier_value`) and named in the footer.
+- ✅ **Lease liabilities in debt**, as `debt_to_equity_with_leases` (Subramanyam Ch. 3). Totals or
+  current + noncurrent parts; finance leases already inside a debt tag are recorded as 0.
 - ✅ **Cite MD&A and risk-factor passages** (`passages.py`, a `retrieve` node). Item 7 and Item 1A
   split into paragraphs, BM25 over exact terms, top 4 to the writer as `[P3]` citations, each cited
   passage quoted under the memo. Numbers still come only from placeholders, and passage text is
@@ -466,8 +469,10 @@ Pick from these based on what Iteration 1 taught:
   zero-filled, which ratios that costs — free to run) and `scripts/batch.py` (one question across a
   watchlist, a memo each plus a summary, failures recorded rather than fatal, with a total spend cap).
 - A per-run trace file and more evals (a hand-checked gold set, claim grading)
-- Averages instead of ending balances; interest coverage and other solvency metrics
-- Banks and insurers (current ratio doesn't apply)
+- ✅ **Averages and solvency:** `roe_average_equity` (Subramanyam), `interest_coverage` (EBIT over
+  interest, B&D §2.6), `debt_to_capital` (B&D eq. 2.16), `operating_margin`.
+- ✅ **Banks and insurers:** an unclassified balance sheet makes liquidity, debt and interest
+  ratios "doesn't apply" rather than wrong. Bank-specific ratios (NIM, capital) are not built.
 - Publish: public repo, blog post
 
 ## Iteration 3 (planned): serve it as an API

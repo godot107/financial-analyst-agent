@@ -120,6 +120,22 @@ def test_facts_are_included_when_asked_for(service):
     assert {"line_item", "concept", "period", "accession"} <= set(result["facts"][0])
 
 
+def test_more_filings_are_asked_for_only_when_requested(tmp_path):
+    asked = []
+
+    def fetch(ticker, filings=1):
+        asked.append(filings)
+        return FACTS
+
+    service = Service(tmp_path, drafts=[CLEAN_DRAFT] * 2, fetch=fetch)
+    for body in (MEMO, {**MEMO, "filings": 3}):
+        service.client.post("/v1/memos", json=body, headers=BOT)
+        service.worker.process_next()
+
+    assert asked == [1, 3]
+    assert service.client.post("/v1/memos", json={**MEMO, "filings": 6}, headers=BOT).status_code == 422
+
+
 def test_a_memo_that_fails_closed_is_a_result_not_a_server_error(tmp_path):
     service = Service(tmp_path, drafts=[LEAKY_DRAFT] * 3)
     job_id = service.client.post("/v1/memos", json=MEMO, headers=BOT).json()["id"]

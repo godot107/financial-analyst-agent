@@ -32,7 +32,7 @@ from fin_analyst.batch import ESTIMATE_PER_MEMO, run_batch
 from fin_analyst.config import Settings
 from fin_analyst.cache import code_version, memo_key
 from fin_analyst.coverage import concerns, line_item_coverage, metric_coverage
-from fin_analyst.edgar import fetch_facts, latest_accession
+from fin_analyst.edgar import MAX_FILINGS, fetch_facts, latest_accession
 from fin_analyst.graph import RUNS, AnalysisState, run_analysis
 from fin_analyst.jobs import Job, JobStore, next_reset
 from fin_analyst.market import fetch_quote
@@ -54,6 +54,9 @@ class MemoRequest(BaseModel):
     verify: bool = True  # check that citations hold
     news: bool = False  # add recent 8-K press releases
     market: bool = False  # fetch a price for valuation ratios
+    # How many of the latest 10-Ks to read. Each adds a year of history; later
+    # filings' figures win where they restate earlier ones.
+    filings: int = Field(default=1, ge=1, le=MAX_FILINGS)
     # Return an earlier memo instead of writing a new one, if the filings, the
     # question, the options and the code are all unchanged. Free when it hits.
     reuse: bool = False
@@ -231,7 +234,7 @@ class Worker:
             request.question,
             analyst,
             self.settings,
-            fetch=self.fetch,
+            fetch=self._fetch(request.filings),
             runs_dir=self.runs_dir,
             fetch_text=self.fetch_text if request.text else None,
             peer_ticker=request.peer,
@@ -258,6 +261,12 @@ class Worker:
             self.cache.put(
                 key, json.dumps({"memo": state.memo, "result": result, "job_id": job.id}).encode()
             )
+
+    def _fetch(self, filings: int):
+        """The fetcher for this many filings. One is the plain call, which test fakes take."""
+        if filings == 1:
+            return self.fetch
+        return lambda ticker: self.fetch(ticker, filings=filings)
 
     def _batch(self, job: Job, analyst) -> None:
         request = BatchRequest(**job.request)

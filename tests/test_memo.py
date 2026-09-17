@@ -307,3 +307,13 @@ def test_management_s_own_verdict_may_be_cited():
 def test_describing_what_a_ratio_measures_is_not_a_rule_of_thumb():
     draft = "The current ratio (can current assets cover the next year's bills?) {{current_ratio:2025->2026}}."
     assert find_problems(draft, METRICS) == []
+
+
+def test_the_footer_names_restated_figures_and_the_variants_used():
+    restated = Fact(line_item="revenue", fiscal_year=2025, value=105.0, concept="us-gaap:Revenues",
+                    period="2025-06-30", accession="new", earlier_value=100.0, earlier_accession="old")
+    footer = build_footer([restated], [result("roe_average_equity", 2026, 0.3, "percent")], "MSFT")
+
+    assert "revenue 2025 (first filed in old)" in footer
+    assert "except roe_average_equity" in footer
+    assert "Debt excludes lease liabilities." in footer

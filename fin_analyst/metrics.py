@@ -1,11 +1,12 @@
 """Step 2: the ratios.
 
-Nine ratios, each a small function over the facts from `edgar.py`. Claude picks
+The ratios, each a small function over the facts from `edgar.py`. Claude picks
 which ones to use, but never computes one and never sees this file's arithmetic.
 
 Definitions follow Berk & DeMarzo, *Corporate Finance* Ch. 2 and Subramanyam,
-*Financial Statement Analysis* Ch. 1 and 10. Balances are ending balances, not
-averages (B&D eq. 2.20 does the same; its footnote allows averages instead).
+*Financial Statement Analysis* Ch. 1, 3, 10 and 11. Balances are ending balances,
+not averages (B&D eq. 2.20 does the same; its footnote allows averages instead),
+except in the one ratio named for its average.
 """
 
 from dataclasses import dataclass
@@ -50,16 +51,34 @@ class Metric:
     # company with no receivables usually means we failed to recognise its tag,
     # and zero would quietly overstate the ratio.
     needs_any_reported: tuple[str, ...] = ()
+    # A second such group, when a ratio adds two kinds of optional line.
+    also_needs_any_reported: tuple[str, ...] = ()
+    # Balance-sheet inputs averaged over this year's and last year's end, as
+    # Subramanyam computes return on equity. Needs the prior year's balance.
+    averaged: tuple[str, ...] = ()
 
 
 def _debt(v: dict[str, float]) -> float:
     """Debt as B&D eq. 2.15: borrowings plus both slices of long-term debt.
 
     Not total liabilities, which would include payables and deferred revenue.
-    Lease liabilities are excluded here; Subramanyam would include them, and
-    that variant is Iteration 2.
+    Lease liabilities are excluded here; `_debt_with_leases` is the variant that
+    counts them.
     """
     return v["short_term_borrowings"] + v["current_long_term_debt"] + v["long_term_debt"]
+
+
+def _debt_with_leases(v: dict[str, float]) -> float:
+    """Debt plus lease liabilities: Subramanyam treats leases as the financing they are.
+
+    Finance leases a company already includes in a debt line are recorded as 0
+    by edgar.py, so nothing is counted twice.
+    """
+    return _debt(v) + v["operating_lease_liabilities"] + v["finance_lease_liabilities"]
+
+
+DEBT_LINES = ("short_term_borrowings", "current_long_term_debt", "long_term_debt")
+LEASE_LINES = ("operating_lease_liabilities", "finance_lease_liabilities")
 
 
 def _market_cap(v: dict[str, float]) -> float:
@@ -105,12 +124,50 @@ METRICS: tuple[Metric, ...] = (
         needs_any_reported=("short_term_borrowings", "current_long_term_debt", "long_term_debt"),
     ),
     Metric(
+        id="debt_to_equity_with_leases",
+        description="borrowings, long-term debt and lease liabilities over shareholders' equity: leverage counting leases as debt",
+        unit="ratio",
+        inputs=(*DEBT_LINES, *LEASE_LINES, "equity"),
+        denominator="equity",
+        formula=lambda v: _debt_with_leases(v) / v["equity"],
+        denominator_must_be_positive=True,
+        needs_any_reported=DEBT_LINES,
+        also_needs_any_reported=LEASE_LINES,
+    ),
+    Metric(
+        id="debt_to_capital",
+        description="borrowings and long-term debt over debt plus shareholders' equity: the share of capital that is borrowed",
+        unit="percent",
+        inputs=(*DEBT_LINES, "equity"),
+        denominator="equity",
+        formula=lambda v: _debt(v) / (_debt(v) + v["equity"]),
+        denominator_must_be_positive=True,
+        needs_any_reported=DEBT_LINES,
+    ),
+    Metric(
+        id="interest_coverage",
+        description="operating income (EBIT) over interest expense: how many times earnings cover the interest bill",
+        unit="ratio",
+        inputs=("operating_income", "interest_expense"),
+        denominator="interest_expense",
+        formula=lambda v: v["operating_income"] / v["interest_expense"],
+        denominator_must_be_positive=True,
+    ),
+    Metric(
         id="gross_margin",
         description="gross profit over revenue: what's left after the cost of sales",
         unit="percent",
         inputs=("gross_profit", "revenue"),
         denominator="revenue",
         formula=lambda v: v["gross_profit"] / v["revenue"],
+    ),
+    Metric(
+        id="operating_margin",
+        description="operating income over revenue: profit from the business before interest and taxes",
+        unit="percent",
+        inputs=("operating_income", "revenue"),
+        denominator="revenue",
+        formula=lambda v: v["operating_income"] / v["revenue"],
     ),
     Metric(
         id="net_margin",
@@ -145,6 +202,16 @@ METRICS: tuple[Metric, ...] = (
         denominator="equity",
         formula=lambda v: v["net_income"] / v["equity"],
         denominator_must_be_positive=True,
+    ),
+    Metric(
+        id="roe_average_equity",
+        description="net income over the average of this and last year's equity: return on equity as Subramanyam computes it, less distorted by a year-end buyback or issue",
+        unit="percent",
+        inputs=("net_income", "equity"),
+        denominator="equity",
+        formula=lambda v: v["net_income"] / v["equity"],
+        denominator_must_be_positive=True,
+        averaged=("equity",),
     ),
     Metric(
         id="pe_ratio",
@@ -183,6 +250,12 @@ METRICS: tuple[Metric, ...] = (
 )
 
 METRICS_BY_ID = {m.id: m for m in METRICS}
+# Inputs read from a balance sheet: a ratio using any of them covers balance sheet years.
+BALANCE_INPUTS = {
+    "total_assets", "current_assets", "current_liabilities", "cash", "short_term_investments",
+    "accounts_receivable", "equity", "short_term_borrowings", "current_long_term_debt",
+    "long_term_debt", "operating_lease_liabilities", "finance_lease_liabilities",
+}
 # Ratios that need a share price, which no filing contains.
 MARKET_METRIC_IDS = {m.id for m in METRICS if "share_price" in m.inputs}
 
@@ -199,47 +272,55 @@ def values_by_year(facts: list[Fact]) -> dict[int, Values]:
     return by_year
 
 
-def compute(metric: Metric, year: int, values: Values) -> MetricResult:
-    """One ratio for one year, or a reason there isn't one."""
+# Lines only a classified balance sheet or a commercial income statement has.
+# The debt lines belong here too: a bank's debt isn't split into current and
+# long-term, so these tags find only a sliver of it. JPMorgan came out at 0.18x
+# debt to equity and Travelers at 0.00x - wrong, and plausible enough to publish.
+CLASSIFIED_ONLY = {
+    "current_assets", "current_liabilities", "operating_income", "interest_expense",
+    "short_term_borrowings", "current_long_term_debt", "long_term_debt",
+}
+NOT_APPLICABLE = (
+    "doesn't apply: the balance sheet isn't split into current and non-current and there is no "
+    "operating income line, as is usual for banks and insurers"
+)
+
+
+def _unavailable(metric: Metric, year: int, reason: str) -> MetricResult:
+    return MetricResult(metric_id=metric.id, fiscal_year=year, value=None, unit=metric.unit, reason=reason)
+
+
+def compute(metric: Metric, year: int, values: Values, prior: Values | None = None) -> MetricResult:
+    """One ratio for one year, or a reason there isn't one.
+
+    `prior` is the year before, needed only by a ratio with averaged inputs.
+    """
     missing = [name for name in metric.inputs if name not in values]
     if missing:
-        return MetricResult(
-            metric_id=metric.id,
-            fiscal_year=year,
-            value=None,
-            unit=metric.unit,
-            reason=f"the filing has no {', '.join(missing)} for {year}",
-        )
+        return _unavailable(metric, year, f"the filing has no {', '.join(missing)} for {year}")
 
-    if metric.needs_any_reported and not any(
-        values[name].reported for name in metric.needs_any_reported
-    ):
-        wanted = " or ".join(metric.needs_any_reported)
-        return MetricResult(
-            metric_id=metric.id,
-            fiscal_year=year,
-            value=None,
-            unit=metric.unit,
-            reason=f"the filing reports no {wanted} for {year} under tags this tool knows",
-        )
+    for group in (metric.needs_any_reported, metric.also_needs_any_reported):
+        if group and not any(values[name].reported for name in group):
+            wanted = " or ".join(group)
+            return _unavailable(
+                metric, year, f"the filing reports no {wanted} for {year} under tags this tool knows"
+            )
 
     numbers = {name: values[name].value for name in metric.inputs}
+    for name in metric.averaged:
+        if prior is None or name not in prior:
+            return _unavailable(
+                metric, year, f"averaging {name} needs {year - 1}'s balance, which these filings don't include"
+            )
+        numbers[f"{name}_prior_year"] = prior[name].value
+        numbers[name] = (values[name].value + prior[name].value) / 2
+
     denominator = numbers[metric.denominator]
     if denominator == 0:
-        return MetricResult(
-            metric_id=metric.id,
-            fiscal_year=year,
-            value=None,
-            unit=metric.unit,
-            reason=f"{metric.denominator} is zero for {year}",
-        )
+        return _unavailable(metric, year, f"{metric.denominator} is zero for {year}")
     if metric.denominator_must_be_positive and denominator < 0:
-        return MetricResult(
-            metric_id=metric.id,
-            fiscal_year=year,
-            value=None,
-            unit=metric.unit,
-            reason=f"{metric.denominator} is negative for {year}, which makes this ratio misleading",
+        return _unavailable(
+            metric, year, f"{metric.denominator} is negative for {year}, which makes this ratio misleading"
         )
 
     return MetricResult(
@@ -251,18 +332,76 @@ def compute(metric: Metric, year: int, values: Values) -> MetricResult:
     )
 
 
-def compute_all(facts: list[Fact], metric_ids: list[str] | None = None) -> list[MetricResult]:
-    """Every requested metric, for every year the filing can support it.
+def is_unclassified(facts: list[Fact]) -> bool:
+    """No current assets or liabilities in any year: a bank's or insurer's balance sheet.
 
-    A year counts only if the metric's denominator is there; otherwise the
-    filing simply doesn't cover that year and there is nothing to report.
+    They list assets and liabilities by liquidity instead of splitting them at
+    one year, and report no operating income, so the liquidity ratios and
+    interest coverage don't apply. JPMorgan's and Travelers' 10-Ks both look so.
+    """
+    items = {f.line_item for f in facts}
+    # Only a real balance sheet counts: a hand-built set of facts with no total
+    # assets says nothing about how the company classifies its balance sheet.
+    return "total_assets" in items and not items & {"current_assets", "current_liabilities"}
+
+
+def _years_for(metric: Metric, by_year: dict[int, Values]) -> list[int]:
+    """The years a metric should report on, newest first.
+
+    Every year it can actually be computed, plus every year of the statement it
+    belongs to - a balance-sheet ratio every year with a balance sheet, an income
+    ratio every year with revenue - so a line that stops being reported shows up
+    as "not available" for that year. Apple stopped reporting interest expense
+    after 2023: without this, its interest coverage simply ended in 2023, and
+    read as current.
+    """
+    anchor = "total_assets" if BALANCE_INPUTS & set(metric.inputs) else "revenue"
+    if not any(anchor in values for values in by_year.values()):
+        anchor = metric.denominator  # a partial set of facts: fall back to what is there
+    years = sorted(
+        (
+            year for year, values in by_year.items()
+            if anchor in values or all(name in values for name in metric.inputs)
+        ),
+        reverse=True,
+    )
+    if metric.id in MARKET_METRIC_IDS:
+        return years[:1]  # a price exists only for today
+    if metric.averaged:
+        # Starts where there is a year before to average with.
+        years = [
+            y for y in years
+            if y - 1 in by_year and all(n in by_year[y - 1] for n in metric.averaged)
+        ]
+    return years
+
+
+def compute_all(facts: list[Fact], metric_ids: list[str] | None = None) -> list[MetricResult]:
+    """Every requested metric, for every year the filings cover.
+
+    A metric that can't be computed still gets a result saying why, so the
+    writer tells the reader instead of silently dropping what was asked for.
     """
     metrics = [METRICS_BY_ID[i] for i in (metric_ids or list(METRICS_BY_ID))]
     by_year = values_by_year(facts)
+    if not by_year:
+        return []
+    latest = max(by_year)
+    unclassified = is_unclassified(facts)
 
     results = []
     for metric in metrics:
-        for year in sorted(by_year, reverse=True):
-            if metric.denominator in by_year[year]:
-                results.append(compute(metric, year, by_year[year]))
+        if unclassified and CLASSIFIED_ONLY & set(metric.inputs):
+            results.append(_unavailable(metric, latest, NOT_APPLICABLE))
+            continue
+        years = _years_for(metric, by_year)
+        if not years:
+            reason = (
+                "averaging needs two balance sheets in a row, which these filings don't include"
+                if metric.averaged
+                else f"the filing has no {metric.denominator} for any year"
+            )
+            results.append(_unavailable(metric, latest, reason))
+            continue
+        results += [compute(metric, year, by_year[year], by_year.get(year - 1)) for year in years]
     return results

@@ -8,7 +8,7 @@ from functools import partial
 
 from fin_analyst.cache import LocalCache, NoCache
 from fin_analyst.config import PROJECT_ROOT, load_settings
-from fin_analyst.edgar import describe_filing, fetch_facts
+from fin_analyst.edgar import MAX_FILINGS, describe_filing, fetch_facts
 from fin_analyst.graph import run_analysis
 from fin_analyst.market import fetch_quote
 from fin_analyst.news import fetch_news
@@ -47,6 +47,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--market",
         action="store_true",
         help="fetch a share price so valuation ratios work (needs ALPHAVANTAGE_KEY)",
+    )
+    parser.add_argument(
+        "--filings",
+        type=int,
+        default=1,
+        choices=range(1, MAX_FILINGS + 1),
+        metavar="N",
+        help="read the latest N 10-Ks (1-5): each adds a year of history, and restatements are noted",
     )
     parser.add_argument(
         "--no-cache",
@@ -115,15 +123,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # None means "don't read the narrative at all"; the default reads Item 7 and 1A.
     fetch_text = None if args.no_text else partial(fetch_passages, cache=cache)
+    fetch = partial(fetch_facts, cache=cache, filings=args.filings)
     # The trace is always kept in the run record; --verbose also prints it live.
     tracer = Tracer([pretty()] if args.verbose else [])
 
     if args.chat:
-        return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text, tracer)
+        return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text, tracer, fetch)
 
     state = run_analysis(
         ticker, args.question, analyst, settings, peer_ticker=args.peer,
-        fetch=partial(fetch_facts, cache=cache),
+        fetch=fetch,
         fetch_text=fetch_text, verify=not args.no_verify,
         quote=partial(fetch_quote, cache=cache) if args.market else None,
         fetch_news=(
@@ -148,13 +157,15 @@ def show(state, analyst) -> None:
     print(f"\n[{len(state.drafts)} draft(s), ${analyst.spent_usd:.4f} spent]", file=sys.stderr)
 
 
-def run_chat(ticker, question, analyst, settings, peer=None, fetch_text=None, tracer=None) -> int:
+def run_chat(
+    ticker, question, analyst, settings, peer=None, fetch_text=None, tracer=None, fetch=fetch_facts
+) -> int:
     """Ask follow-ups until the turns or the budget run out, whichever comes first."""
     from fin_analyst.chat import ChatSession
 
     chat = ChatSession(
         ticker, analyst, settings, peer_ticker=peer, fetch_text=fetch_text, tracer=tracer,
-        describe=describe_filing,
+        fetch=fetch, describe=describe_filing,
     )
     answered = 0
 

@@ -225,16 +225,25 @@ and token ceilings are set per node in `config.yaml`.
 
 ## Limitations
 
-- **One filing per company.** Peer comparison is one company against one other, at year ends that
-  usually differ; there is no common-period restatement.
+- **Up to five filings per company** (`--filings N`). Where a later 10-K restates a year, the later
+  figure is used and the footer names what changed. A change in which XBRL tag matched looks the
+  same as a restatement, so the footer says "restated or tagged differently". Peer comparison is
+  one company against one other, at year ends that usually differ.
 - **Market data is one price.** With `--market` and a free Alpha Vantage key you get P/E,
   market-to-book and EV/revenue, computed from the filing's diluted share count and a current
   price. That mixes a price from today with a fiscal year's figures, which the footer says
   explicitly. Alpha Vantage's *fundamentals* are deliberately unused: no accession number.
-- **Banks:** liquidity ratios are correctly unavailable (no current assets), but debt to equity is
-  computed from tags that miss most bank borrowing, so it understates leverage. Don't trust it.
+- **Banks and insurers** (no current/non-current split) get return on equity and the equity
+  multiplier. Liquidity, debt and interest coverage ratios say they don't apply: the debt tags this
+  tool reads found a sliver of JPMorgan's borrowing (0.18x debt to equity) and none of Travelers'.
+  Bank-specific measures (net interest margin, capital ratios) aren't built.
+- **Interest coverage needs an interest expense line.** Apple stopped reporting one after FY2023, so
+  its latest years show as unavailable rather than ending quietly at 2023.
 - **Retailers that don't tag gross profit** (Costco) get no gross margin rather than a derived one.
-- **Ending balances, not averages.** Debt excludes lease liabilities. Both are stated in the memo.
+- **Ending balances, not averages,** except `roe_average_equity`. **Debt excludes lease
+  liabilities,** except `debt_to_equity_with_leases`. The footer says which applied. Lease
+  liabilities need either a total or both current and noncurrent parts tagged; half is treated as
+  unreported.
 - **52/53-week years ending in early January** are dated to the following calendar year. The footer
   always shows the period end date, so it is visible rather than hidden.
 - Not investment advice: no price targets, no buy/sell calls.

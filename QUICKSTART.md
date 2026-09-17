@@ -73,6 +73,9 @@ python -m fin_analyst MSFT "Why did gross margin change?"
 # compare two companies
 python -m fin_analyst MSFT "How does its liquidity compare?" --peer GOOGL
 
+# read the last 3 10-Ks for four or five years of history (free: SEC data, cached per filing)
+python -m fin_analyst COST "How has its leverage changed, counting leases?" --filings 3
+
 # add the company's recent 8-K press releases (free, no key)
 python -m fin_analyst MSFT "What has it announced about AI capacity?" --news
 

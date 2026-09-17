@@ -312,7 +312,23 @@ def build_sources(memo: str, passages: list[Passage], quote_chars: int = 220) ->
 def _source_line(ticker: str, facts) -> str:
     accessions = sorted({f.accession for f in facts})
     periods = sorted({f.period for f in facts if f.line_item == "total_assets"}, reverse=True)
-    return f"{ticker}: SEC filing {', '.join(accessions)}; balance sheet dates {', '.join(periods)}."
+    filings = "SEC filing" if len(accessions) == 1 else "SEC filings"
+    return f"{ticker}: {filings} {', '.join(accessions)}; balance sheet dates {', '.join(periods)}."
+
+
+def _restatements(ticker: str, facts) -> str | None:
+    """Figures a later 10-K changed. The memo uses the later figure."""
+    changed = [f for f in facts if f.earlier_value is not None]
+    if not changed:
+        return None
+    items = "; ".join(
+        f"{f.line_item} {f.fiscal_year} (first filed in {f.earlier_accession})"
+        for f in sorted(changed, key=lambda f: (f.line_item, -f.fiscal_year))
+    )
+    return (
+        f"{ticker} figures a later filing changed, restated or tagged differently; the later "
+        f"figure is used: {items}."
+    )
 
 
 def build_footer(
@@ -327,7 +343,17 @@ def build_footer(
     lines = ["---", _source_line(ticker, facts)]
     if peer_ticker:
         lines.append(_source_line(peer_ticker, peer_facts))
-    lines.append("Ratios use ending balances, not averages. Debt excludes lease liabilities.")
+    used = {m.metric_id for m in metrics}
+    lines.append(
+        "Ratios use ending balances, not averages"
+        + (", except roe_average_equity." if "roe_average_equity" in used else ".")
+        + " Debt excludes lease liabilities"
+        + (", except in debt_to_equity_with_leases." if "debt_to_equity_with_leases" in used else ".")
+    )
+    for who, their_facts in ((ticker, facts), (peer_ticker, peer_facts)):
+        note = _restatements(who, their_facts) if who else None
+        if note:
+            lines.append(note)
 
     price = next((f for f in facts if f.line_item == "share_price"), None)
     if price:

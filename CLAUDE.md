@@ -4,7 +4,7 @@ A LangGraph workflow that answers a question about one company with a short memo
 latest 10-K. Claude writes the words; Python computes every number.
 Trello #87: https://trello.com/c/O2wlT16g
 
-**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 255 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
+**Status:** Iteration 1 complete; iteration 2 has peer comparison (`--peer`), MD&A citations (BM25 over Item 7/1A) a claim check (`verify` node), valuation ratios (`--market`) and 8-K news (`--news`). Iteration 2 is built; iteration 3 Phase A (HTTP service) is built and Phase B (Lambda, `infra/`, `deploy/`) is deployed (fin-analyst-app, us-east-1) — see `docs/API_PLAN.md`; calling it and reading traces is `docs/CALLING.md`. 278 tests; a memo costs $0.03–0.09. Results and limitations are in the README; what's left is in `PLAN.md` §6. `PLAN.md` is the build spec. Work its steps in
 order, and keep Iteration 1 small and easy to follow; save extras for Iteration 2.
 
 ## Build / run
@@ -59,6 +59,8 @@ Project-local `.venv`. Runs locally, or on AWS Lambda via `deploy/` (no Bedrock:
 - **Tests never hit the network or the API.** Use fixtures in `tests/fixtures/` and a fake client.
   `tests/conftest.py` enforces it: any socket connection in a test raises. A worker given a real
   cache once looked up filings over the network while every test still passed.
+- **Bump `EXTRACTION_VERSION` in `edgar.py` when line items or tags change.** Cached facts are
+  keyed by accession *and* that version; without the bump, cached filings answer without the new lines.
 - **Cache only what a key pins exactly** (`fin_analyst/cache.py`): filings by accession number,
   prices by day, memos by a hash that includes a fingerprint of the memo-writing code. Never cache
   "the latest filing for a ticker" — look that up every time.

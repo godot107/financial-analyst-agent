@@ -118,9 +118,13 @@ def test_a_missing_line_item_explains_which_metrics_it_costs():
 def test_metric_coverage_separates_computed_years_from_reasons():
     rows = {row.metric_id: row for row in metric_coverage(FACTS)}
     assert rows["roe"].years == [2026, 2025, 2024]
-    # The balance sheet has two dates, so the third year has no equity multiplier.
+    # The balance sheet has two dates, so the third year has no equity multiplier -
+    # and no row either: 2024's equity comes from the equity statement, not a balance sheet.
     assert rows["equity_multiplier"].years == [2026, 2025]
-    assert 2024 in rows["equity_multiplier"].unavailable
+    assert 2024 not in rows["equity_multiplier"].unavailable
+    # A line missing from a year that has a balance sheet does get a reason.
+    without_debt = [f for f in FACTS if not (f.line_item == "long_term_debt" and f.fiscal_year == 2025)]
+    assert 2025 in {row.metric_id: row for row in metric_coverage(without_debt)}["debt_to_equity"].unavailable
 
 
 def test_a_filing_with_nothing_in_it_flags_everything():

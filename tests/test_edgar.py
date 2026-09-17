@@ -9,7 +9,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from fin_analyst.edgar import Fact, describe_filing, fetch_facts, load_facts, select_facts
+from fin_analyst.edgar import (
+    Fact, describe_filing, fetch_facts, load_facts, merge_filings, select_facts,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "msft_facts.json"
 
@@ -217,3 +219,96 @@ def test_a_filing_is_described_from_its_index_entry_alone():
     assert filing.ticker == "MSFT" and filing.company == "MICROSOFT CORP" and filing.cik == 789019
     assert filing.filed == "2026-07-30" and filing.period is None
     assert filing.url == "https://www.sec.gov/Archives/edgar/data/789019/0001193125-26-323660-index.html"
+
+
+# --- leases ------------------------------------------------------------------
+
+
+def test_a_lease_total_is_used_when_the_company_reports_one():
+    """Microsoft reports only the total; its current part hides in other liabilities."""
+    df = make_rows([
+        {"concept": "us-gaap:Assets", "numeric_value": 100.0},
+        {"concept": "us-gaap:OperatingLeaseLiability", "numeric_value": 21_925.0},
+        {"concept": "us-gaap:OperatingLeaseLiabilityNoncurrent", "numeric_value": 16_532.0},
+    ])
+    leases = by_item(select_facts(df, "acc"), "operating_lease_liabilities")[2026]
+    assert leases.value == 21_925.0 and leases.concept == "us-gaap:OperatingLeaseLiability"
+
+
+def test_lease_parts_are_added_when_there_is_no_total():
+    df = make_rows([
+        {"concept": "us-gaap:Assets", "numeric_value": 100.0},
+        {"concept": "us-gaap:FinanceLeaseLiabilityCurrent", "numeric_value": 100.0},
+        {"concept": "us-gaap:FinanceLeaseLiabilityNoncurrent", "numeric_value": 900.0},
+    ])
+    leases = by_item(select_facts(df, "acc"), "finance_lease_liabilities")[2026]
+    assert leases.value == 1_000.0 and "+" in leases.concept
+
+
+def test_half_a_lease_liability_is_not_a_lease_liability():
+    """Only the current part found: better unreported (and no ratio) than half the figure."""
+    df = make_rows([
+        {"concept": "us-gaap:Assets", "numeric_value": 100.0},
+        {"concept": "us-gaap:OperatingLeaseLiabilityCurrent", "numeric_value": 100.0},
+    ])
+    leases = by_item(select_facts(df, "acc"), "operating_lease_liabilities")[2026]
+    assert leases.reported is False
+
+
+def test_finance_leases_already_inside_debt_are_not_counted_twice():
+    df = make_rows([
+        {"concept": "us-gaap:Assets", "numeric_value": 100.0},
+        {"concept": "us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent", "numeric_value": 500.0},
+        {"concept": "us-gaap:FinanceLeaseLiability", "numeric_value": 80.0},
+    ])
+    leases = by_item(select_facts(df, "acc"), "finance_lease_liabilities")[2026]
+    assert leases.value == 0.0 and leases.reported
+    assert leases.concept == "included in us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent"
+
+
+# --- several filings ---------------------------------------------------------
+
+
+def fact(item, year, value, accession, reported=True):
+    return Fact(line_item=item, fiscal_year=year, value=value, concept="us-gaap:X" if reported else "",
+                period=f"{year}-06-30", accession=accession, reported=reported)
+
+
+def test_the_later_filing_wins_and_the_first_filed_figure_is_kept():
+    newest = [fact("revenue", 2026, 120, "new"), fact("revenue", 2025, 105, "new")]
+    older = [fact("revenue", 2025, 100, "old"), fact("revenue", 2024, 90, "old")]
+    merged = {f.fiscal_year: f for f in merge_filings([newest, older])}
+
+    assert sorted(merged) == [2024, 2025, 2026]
+    assert merged[2025].value == 105 and merged[2025].accession == "new"
+    assert merged[2025].earlier_value == 100 and merged[2025].earlier_accession == "old"
+    assert merged[2024].earlier_value is None
+
+
+def test_a_reported_figure_beats_a_zero_filled_one_from_a_later_filing():
+    newest = [fact("long_term_debt", 2025, 0.0, "new", reported=False)]
+    older = [fact("long_term_debt", 2025, 700, "old")]
+    [merged] = merge_filings([newest, older])
+    assert merged.value == 700 and merged.reported and merged.earlier_value is None
+
+
+def test_several_filings_are_read_newest_first():
+    from types import SimpleNamespace
+
+    class Entry:
+        def __init__(self, accession, assets):
+            self.accession_no, self.assets = accession, assets
+
+        def xbrl(self):
+            rows = make_rows([{"concept": "us-gaap:Assets", "numeric_value": self.assets,
+                               "period_instant": f"{self.assets:.0f}-06-30"}])
+            return SimpleNamespace(facts=SimpleNamespace(to_dataframe=lambda: rows))
+
+    entries = [Entry("new", 2026.0), Entry("old", 2025.0)]
+    company = lambda ticker: SimpleNamespace(get_filings=lambda form: SimpleNamespace(
+        latest=lambda n=1: entries[:n] if n > 1 else entries[0]))
+    facts = fetch_facts("MSFT", identity="Test test@example.com", company=company, filings=2)
+
+    assert sorted(f.fiscal_year for f in facts if f.line_item == "total_assets") == [2025, 2026]
+    with pytest.raises(ValueError, match="between 1 and 5"):
+        fetch_facts("MSFT", identity="Test test@example.com", company=company, filings=9)

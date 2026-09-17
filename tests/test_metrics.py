@@ -29,6 +29,12 @@ RECEIVABLES = 80_876
 CURRENT_LONG_TERM_DEBT = 9_227
 LONG_TERM_DEBT = 31_067
 SHORT_TERM_BORROWINGS = 0  # Microsoft reports none
+OPERATING_INCOME = 155_237
+INTEREST_EXPENSE = 3_051  # "Other income (expense), net" note
+OPERATING_LEASES = 21_925  # lease note: current part sits in other current liabilities
+FINANCE_LEASES = 66_594  # lease note: in other current and long-term liabilities, not debt
+EQUITY_2025 = 343_479
+DEBT = SHORT_TERM_BORROWINGS + CURRENT_LONG_TERM_DEBT + LONG_TERM_DEBT
 
 EXPECTED_2026 = {
     "current_ratio": CURRENT_ASSETS / CURRENT_LIABILITIES,
@@ -40,6 +46,11 @@ EXPECTED_2026 = {
     "asset_turnover": REVENUE / TOTAL_ASSETS,
     "equity_multiplier": TOTAL_ASSETS / EQUITY,
     "roe": NET_INCOME / EQUITY,
+    "operating_margin": OPERATING_INCOME / REVENUE,
+    "interest_coverage": OPERATING_INCOME / INTEREST_EXPENSE,
+    "debt_to_capital": DEBT / (DEBT + EQUITY),
+    "debt_to_equity_with_leases": (DEBT + OPERATING_LEASES + FINANCE_LEASES) / EQUITY,
+    "roe_average_equity": NET_INCOME / ((EQUITY + EQUITY_2025) / 2),
 }
 
 
@@ -174,3 +185,64 @@ def test_zero_debt_lines_that_are_reported_do_compute():
     ]
     results = compute_all(facts(equity=1_000) + reported_zero, ["debt_to_equity"])
     assert only(results, "debt_to_equity").value == 0.0
+
+
+# --- solvency, leases, averages, and companies these ratios don't fit ------
+
+
+def test_an_averaged_ratio_records_both_balances(results):
+    result = results[("roe_average_equity", 2026)]
+    assert result.inputs["equity_prior_year"] == EQUITY_2025 * 1e6
+    # 2025 averages with 2024's equity, which the equity statement reports; 2024
+    # is the earliest equity figure, with no year before it to average with.
+    assert results[("roe_average_equity", 2025)].inputs["equity_prior_year"] > 0
+    assert ("roe_average_equity", 2024) not in results
+
+
+def test_a_line_that_stops_being_reported_is_unavailable_for_the_latest_year():
+    """Apple dropped interest expense after 2023. Coverage must not end quietly in 2023."""
+    history = facts(revenue=100, operating_income=30, interest_expense=1)
+    history = [f.model_copy(update={"fiscal_year": 2023}) for f in history]
+    history += facts(revenue=120, operating_income=40)  # 2026: no interest expense
+    results = compute_all(history, ["interest_coverage"])
+
+    assert [r.fiscal_year for r in results] == [2026, 2023]
+    assert results[0].value is None and "interest_expense" in results[0].reason
+
+
+def test_leases_count_only_when_some_lease_line_is_reported():
+    unreported = [
+        Fact(line_item=name, fiscal_year=2026, value=0.0, concept="", period="2026-06-30",
+             accession="acc", reported=False)
+        for name in ("operating_lease_liabilities", "finance_lease_liabilities")
+    ]
+    results = compute_all(
+        facts(equity=1_000, short_term_borrowings=0, current_long_term_debt=0, long_term_debt=100)
+        + unreported,
+        ["debt_to_equity_with_leases"],
+    )
+    assert only(results, "debt_to_equity_with_leases").value is None
+    assert "lease" in only(results, "debt_to_equity_with_leases").reason
+
+
+def bank(**more):
+    """A balance sheet with no current/non-current split, like JPMorgan's."""
+    return facts(total_assets=4_000, equity=300, net_income=50, revenue=180,
+                 long_term_debt=40, **more)
+
+
+@pytest.mark.parametrize(
+    "metric_id", ["current_ratio", "quick_ratio", "debt_to_equity", "interest_coverage", "debt_to_capital"]
+)
+def test_ratios_that_do_not_fit_a_bank_say_so(metric_id):
+    """JPMorgan came out at 0.18x debt to equity: its debt isn't split into the
+    lines this tool reads, so the number was a sliver of the real one."""
+    result = only(compute_all(bank(interest_expense=10), [metric_id]), metric_id)
+    assert result.value is None
+    assert "banks and insurers" in result.reason
+
+
+def test_a_bank_still_gets_the_ratios_that_do_fit():
+    results = compute_all(bank(), ["roe", "equity_multiplier"])
+    assert only(results, "roe").value == pytest.approx(50 / 300)
+    assert only(results, "equity_multiplier").value == pytest.approx(4_000 / 300)
