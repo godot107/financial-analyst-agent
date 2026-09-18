@@ -17,6 +17,7 @@ ARGS=(
   --capabilities CAPABILITY_NAMED_IAM
   --no-fail-on-empty-changeset
   --parameter-overrides ProjectName="$PROJECT" ImageUri="$IMAGE" BoundaryArn="$BOUNDARY"
+  AlertEmail="${ALERT_EMAIL:-aws@willieman.com}"
 )
 
 if [ "${1:-}" != "--execute" ]; then

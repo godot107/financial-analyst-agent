@@ -302,6 +302,8 @@ test:
 - [`notebooks/walkthrough.ipynb`](notebooks/walkthrough.ipynb) — every step opened up: the filing's
   facts, the ratios, retrieval, the checks, a traced run and the memo. Free to run, and it renders
   on GitHub without running anything
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the AWS stack, diagrammed: what each piece is
+  for, what one memo does end to end, and what alerts when it stops
 - [`QUICKSTART.md`](QUICKSTART.md) — setup, every command, what each costs, and what the errors mean
 - [`examples/`](examples/) — a real memo and its full run record, including a rejected draft
 - [`BLOG.md`](BLOG.md) — why it is built this way, and what the checks caught

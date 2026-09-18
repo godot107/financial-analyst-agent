@@ -24,6 +24,15 @@ Parameters:
   JobRetentionDays:
     Type: Number
     Default: 90
+  AlertEmail:
+    Type: String
+    Default: ""
+    Description: >-
+      Where to send alerts. AWS emails a confirmation link once; alerts only
+      arrive after it is clicked. Empty means no alerts at all.
+
+Conditions:
+  WantsAlerts: !Not [!Equals [!Ref AlertEmail, ""]]
 
 Resources:
   JobsBucket:
@@ -79,6 +88,94 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${ProjectName}"
       RetentionInDays: !Ref LogRetentionDays
+
+  # --- telling someone when it stops working -------------------------------
+  # Two things a caller cannot see: the Anthropic account running out of credit
+  # (every memo then fails on its first call) and the function itself erroring.
+
+  Alerts:
+    Type: AWS::SNS::Topic
+    Condition: WantsAlerts
+    Properties:
+      TopicName: !Sub "${ProjectName}-alerts"
+      DisplayName: fin-analyst
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+      Tags:
+        - Key: project
+          Value: !Ref ProjectName
+
+  AlertsPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Condition: WantsAlerts
+    Properties:
+      Topics: [!Ref Alerts]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AlarmsMayPublish
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref Alerts
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+
+  # Every run writes its steps to the log as JSON. A run that failed on billing
+  # carries the marker llm.py puts in the message, so counting those lines needs
+  # no extra code in the function.
+  OutOfCreditFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LogGroup
+      FilterPattern: '{ $.trace.data.error = "*OUT OF CREDIT*" }'
+      MetricTransformations:
+        - MetricNamespace: !Ref ProjectName
+          MetricName: OutOfCredit
+          MetricValue: "1"
+          DefaultValue: 0
+
+  OutOfCreditAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: WantsAlerts
+    Properties:
+      AlarmName: !Sub "${ProjectName}-out-of-credit"
+      AlarmDescription: >-
+        The Anthropic account has no credit left, so every memo fails on its
+        first call. Top it up, or turn on auto-reload.
+      Namespace: !Ref ProjectName
+      MetricName: OutOfCredit
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Alerts]
+
+  FunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: WantsAlerts
+    Properties:
+      AlarmName: !Sub "${ProjectName}-function-errors"
+      AlarmDescription: >-
+        The function itself failed - a crash, a timeout, or a bad deploy. A memo
+        that fails for its own reasons is recorded in the job, not here.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProjectName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Alerts]
 
   FunctionRole:
     Type: AWS::IAM::Role
@@ -171,3 +268,7 @@ Outputs:
     Value: !Ref Function
   BucketName:
     Value: !Ref JobsBucket
+  AlertTopic:
+    Condition: WantsAlerts
+    Description: Confirm the emailed subscription once, or alarms go nowhere.
+    Value: !Ref Alerts

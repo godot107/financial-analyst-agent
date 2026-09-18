@@ -145,6 +145,21 @@ fast routes only), keys issued per caller, rate limits, and a public tier restri
 memos (`--no-text --no-verify`, ~$0.03) with a small global daily cap. A web application firewall
 adds a monthly charge; price it before adding it.
 
+## When it stops working
+
+Two failures a caller cannot see, so both email `AlertEmail` through an SNS topic in the app stack:
+
+| Alarm | Fires when | Why it needs an alarm |
+|---|---|---|
+| `fin-analyst-out-of-credit` | a run fails with the `OUT OF CREDIT` marker | the Anthropic account is empty, so every memo fails on its first call and spends nothing. Auto-reload in the Anthropic console prevents it; this says it happened |
+| `fin-analyst-function-errors` | the Lambda's own `Errors` metric is above zero | a crash, a timeout or a bad deploy, none of which reach a job result |
+
+A memo that fails on its own merits - three rejected drafts, an unsupported claim - is *not* an
+alarm. It is recorded in the job and in the trace, and it is the system working.
+
+The subscription is confirmed once by clicking the link AWS emails. Until then alarms fire into
+nothing. Cost: about $0.10 per alarm per month, and SNS email is free at this volume.
+
 ## Caching
 
 Measured first, because it changes what is worth caching. SEC fetches for a memo took **3.6 s cold

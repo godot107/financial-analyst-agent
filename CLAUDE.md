@@ -95,3 +95,9 @@ everything after it runs as the restricted `fin-analyst` profile. Never use the 
 its policy covers Lightsail only. Never print a secret: keys go into the CLI credentials file or SSM
 on stdin. `04_app.sh` without `--execute` only previews; ask before `--execute`, before
 `05_verify.sh --memo` (it spends), and before any teardown.
+
+**Alerts** (`infra/app.yaml`): an SNS topic emails `AlertEmail` (default aws@willieman.com) when
+either alarm fires - the Anthropic account is out of credit (a log filter for the `OUT OF CREDIT`
+marker `llm.py` writes) or the function itself errored. The subscription must be confirmed once by
+email. Adding them needed new deployer permissions, so `infra/iam.yaml` changed too: re-run
+`./deploy/00_iam.sh` **as admin** before deploying the app stack.

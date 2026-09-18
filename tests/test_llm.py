@@ -13,6 +13,8 @@ import pytest
 from fin_analyst.config import load_settings
 from fin_analyst.graph import AnalysisFailed
 from fin_analyst.llm import (
+    OUT_OF_CREDIT,
+    OutOfCredit,
     ClaudeAnalyst,
     ModelRefused,
     PlanChoice,
@@ -252,6 +254,34 @@ def test_api_failures_become_recorded_run_failures(settings, cls, status, expect
     a = ClaudeAnalyst(settings, client=FailingClient(api_error(cls, status)))
     with pytest.raises(AnalysisFailed, match=expected):
         a.write_draft("MSFT", "q", METRICS, [])
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Your credit balance is too low to access the Anthropic API",
+        "billing error: payment method declined",
+    ],
+)
+def test_an_empty_account_is_named_not_reported_as_a_bad_request(settings, message):
+    """A 400 reading "returned 400 on the plan step" hides why everything stopped."""
+    error = api_error(anthropic.BadRequestError, 400, message)
+    a = ClaudeAnalyst(settings, client=FailingClient(error))
+
+    with pytest.raises(OutOfCredit) as failed:
+        a.write_draft("MSFT", "q", METRICS, [])
+    assert OUT_OF_CREDIT in str(failed.value)  # the log filter the alarm watches for
+    assert "topped up" in str(failed.value)
+
+
+def test_an_ordinary_bad_request_is_not_called_a_billing_problem(settings):
+    error = api_error(anthropic.BadRequestError, 400, "max_tokens: must be greater than 0")
+    a = ClaudeAnalyst(settings, client=FailingClient(error))
+
+    with pytest.raises(AnalysisFailed) as failed:
+        a.write_draft("MSFT", "q", METRICS, [])
+    assert not isinstance(failed.value, OutOfCredit)
+    assert "returned 400" in str(failed.value)
 
 
 # --- citing the filing's narrative ---------------------------------------

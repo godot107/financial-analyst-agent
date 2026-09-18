@@ -135,6 +135,17 @@ class ResponseTruncated(AnalysisFailed):
     """The reply hit max_tokens. A half-written memo is not a memo."""
 
 
+class OutOfCredit(AnalysisFailed):
+    """The API account has no credit left. Every run fails until it is topped up."""
+
+
+# What the API says when the account is empty ("Your credit balance is too low
+# to access the Anthropic API..."), and the marker our own message carries so a
+# log filter can alarm on it.
+BILLING_WORDS = ("credit balance", "billing", "insufficient funds", "quota")
+OUT_OF_CREDIT = "OUT OF CREDIT"
+
+
 def plan_tool() -> dict:
     """A strict tool whose ids are an enum of the registry, so a typo can't get through."""
     return {
@@ -317,6 +328,14 @@ class ClaudeAnalyst:
             retry_after = limited.response.headers.get("retry-after", "a moment")
             raise AnalysisFailed(f"rate limited on the {node} step; retry after {retry_after}") from None
         except anthropic.APIStatusError as failed:
+            # An empty account is not a bug in the request: say so plainly, because
+            # nothing will succeed until someone tops it up or turns on auto-reload.
+            if any(word in (failed.message or "").lower() for word in BILLING_WORDS):
+                raise OutOfCredit(
+                    f"{OUT_OF_CREDIT}: the Anthropic API rejected the {node} step for billing - "
+                    f'"{failed.message}". No run will succeed until the account is topped up '
+                    "(console.anthropic.com, Plans & Billing; auto-reload avoids this)."
+                ) from None
             raise AnalysisFailed(
                 f"the API returned {failed.status_code} on the {node} step: {failed.message}"
             ) from None

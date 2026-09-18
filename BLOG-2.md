@@ -15,6 +15,9 @@ itself: API Gateway gives up at 30. So the service takes a job and answers strai
 invokes itself asynchronously to write the memo, and the caller polls for it. Jobs and cached filings
 live in S3, secrets in SSM Parameter Store, and nothing sensitive is baked into the image.
 
+![The stack: a caller, one Lambda behind an IAM function URL, S3 for jobs and cache, SSM for
+secrets, and alarms that email when it stops](docs/architecture.png)
+
 The URL has **two locks**, and a request needs both:
 
 | Lock | Checked by | Without it |
