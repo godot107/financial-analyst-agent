@@ -5,8 +5,7 @@ costs a few cents a month at rest; the money is in the Claude calls, which is wh
 sit in front of them.
 
 Everything here is created by CloudFormation from `infra/`, deployed by the numbered scripts in
-`deploy/`. Calling it is [`CALLING.md`](CALLING.md); the plan behind it is
-[`API_PLAN.md`](API_PLAN.md).
+`deploy/`. Calling it is [`CALLING.md`](CALLING.md).
 
 ## The architecture
 
@@ -71,7 +70,7 @@ flowchart LR
 Gateway stops waiting at 30. The submission returns immediately either way, so the gateway would
 add a hop, a cost and a second thing to configure for nothing. The tradeoff is that a function URL
 has no custom domain of its own: that needs API Gateway in front, which is
-[tabled](API_PLAN.md#phase-c--public-endpoint-optional-and-last).
+not planned: the service is not meant to be public.
 
 **Why the function invokes itself.** The memo has to outlive the request. The API answers with a
 job id in well under a second, then invokes the same function asynchronously with that id; the

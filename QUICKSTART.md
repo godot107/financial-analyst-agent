@@ -67,8 +67,8 @@ Without the key the memo still works; the valuation ratios report themselves una
 ## If Claude API credits run out
 
 Every call fails with a message naming the reason, the run stops before spending anything, and no
-memo is published. On the deployed service that also fires an email alert (see
-[`docs/API_PLAN.md`](docs/API_PLAN.md)). Locally it just prints:
+memo is published. On the deployed service that also fires an email alert (the SNS topic in
+`infra/app.yaml`). Locally it just prints:
 
 ```
 No memo: OUT OF CREDIT: the Anthropic API rejected the plan step for billing - ...

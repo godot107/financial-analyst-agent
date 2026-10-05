@@ -479,12 +479,13 @@ Pick from these based on what Iteration 1 taught:
   deliberately not reproduced.
 - Publish: public repo, blog post
 
-## Iteration 3 (planned): serve it as an API
+## Iteration 3: serve it as an API (built)
 
-See [`docs/API_PLAN.md`](docs/API_PLAN.md). In short: an async job API (a memo takes longer than
+An async job API (a memo takes longer than
 API Gateway's fixed 30-second limit), local FastAPI first, then a container-image Lambda behind an
 IAM-authenticated function URL, with per-caller and global daily spend caps enforced before any
-Claude call. Callers treat memos as advisory, fire-and-forget, and never inside a backtest.
+Claude call. Callers treat memos as advisory, fire-and-forget, and never inside a backtest. A public endpoint is not planned: the service stays local or behind
+the IAM-signed function URL (`docs/ARCHITECTURE.md`, `docs/CALLING.md`).
 
 ## 7. Known traps
 

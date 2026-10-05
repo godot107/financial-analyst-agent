@@ -186,8 +186,8 @@ python -m fin_analyst.server      # needs FIN_ANALYST_API_KEYS; see QUICKSTART
 A memo takes 30–90 seconds, longer than an API gateway will hold a request open, so the service
 takes a job and answers at once: `POST /v1/memos` returns `202` and an id, `GET /v1/memos/{id}`
 returns the memo when it's ready. Every route but health needs a key, and daily spending caps are
-checked when a job is submitted, before any Claude call. See [`docs/API_PLAN.md`](docs/API_PLAN.md)
-for the design and what deploying it involves, and [`docs/CALLING.md`](docs/CALLING.md) for calling
+checked when a job is submitted, before any Claude call. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+for the deployed stack, and [`docs/CALLING.md`](docs/CALLING.md) for calling
 the deployed Lambda (SigV4-signed HTTPS) and reading a run's trace.
 
 Every run keeps a **trace**: each step, its timing and output, and each Claude call's tokens, cost
