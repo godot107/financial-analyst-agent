@@ -365,6 +365,10 @@ def latest_accession(ticker: str, identity: str | None = None, company=Company) 
 MAX_FILINGS = 5
 
 
+class NoAnnualReport(LookupError):
+    """The ticker has no 10-K at the SEC (an ETF, a fund, a foreign filer): nothing to read."""
+
+
 def fetch_facts(
     ticker: str, identity: str | None = None, cache=None, company=Company, filings: int = 1
 ) -> list[Fact]:
@@ -383,7 +387,10 @@ def fetch_facts(
     identify(identity)
     found = company(ticker).get_filings(form="10-K")
     # latest(1) returns one filing; latest(n) returns a list-like of them.
-    recent = [found.latest()] if filings == 1 else list(found.latest(filings))
+    recent = [found.latest()] if filings == 1 else list(found.latest(filings) or [])
+    recent = [filing for filing in recent if filing is not None]
+    if not recent:
+        raise NoAnnualReport(f"{ticker.upper()} has no 10-K on file at the SEC")
     return merge_filings([_facts_of(filing, cache) for filing in recent])
 
 

@@ -312,3 +312,16 @@ def test_several_filings_are_read_newest_first():
     assert sorted(f.fiscal_year for f in facts if f.line_item == "total_assets") == [2025, 2026]
     with pytest.raises(ValueError, match="between 1 and 5"):
         fetch_facts("MSFT", identity="Test test@example.com", company=company, filings=9)
+
+
+@pytest.mark.parametrize("filings", [1, 3])
+def test_a_ticker_without_a_10k_says_so(filings):
+    from types import SimpleNamespace
+
+    from fin_analyst.edgar import NoAnnualReport
+
+    # SPY: edgartools finds the entity, but latest() of its (empty) 10-K list is None.
+    company = lambda ticker: SimpleNamespace(get_filings=lambda form: SimpleNamespace(
+        latest=lambda n=1: None))
+    with pytest.raises(NoAnnualReport, match="SPY has no 10-K"):
+        fetch_facts("spy", identity="Test test@example.com", company=company, filings=filings)

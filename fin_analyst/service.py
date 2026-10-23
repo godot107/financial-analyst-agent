@@ -32,7 +32,7 @@ from fin_analyst.batch import ESTIMATE_PER_MEMO, run_batch
 from fin_analyst.config import Settings
 from fin_analyst.cache import code_version, memo_key
 from fin_analyst.coverage import concerns, line_item_coverage, metric_coverage
-from fin_analyst.edgar import MAX_FILINGS, fetch_facts, latest_accession
+from fin_analyst.edgar import MAX_FILINGS, NoAnnualReport, fetch_facts, latest_accession
 from fin_analyst.graph import RUNS, AnalysisState, run_analysis
 from fin_analyst.jobs import Job, JobStore, next_reset
 from fin_analyst.market import fetch_quote
@@ -397,7 +397,10 @@ def create_app(
 
     @app.get("/v1/coverage/{ticker}")
     def coverage(ticker: str, key_name: str = Depends(caller)):
-        facts = fetch(ticker.upper())
+        try:
+            facts = fetch(ticker.upper())
+        except NoAnnualReport as exc:  # an ETF or a fund: an answer, not a server error
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {
             "ticker": ticker.upper(),
             "line_items": [row.model_dump() for row in line_item_coverage(facts)],

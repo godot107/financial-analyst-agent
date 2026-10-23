@@ -279,6 +279,16 @@ def test_a_batch_must_say_what_it_may_spend(service):
     assert service.client.post("/v1/batches", json=body, headers=BOT).status_code == 422
 
 
+def test_coverage_of_a_ticker_without_a_10k_is_404_not_500(tmp_path):
+    from fin_analyst.edgar import NoAnnualReport
+
+    def fetch(ticker):
+        raise NoAnnualReport(f"{ticker} has no 10-K on file at the SEC")
+
+    response = Service(tmp_path, fetch=fetch).client.get("/v1/coverage/spy", headers=BOT)
+    assert response.status_code == 404 and "SPY has no 10-K" in response.json()["detail"]
+
+
 def test_coverage_is_answered_straight_away_and_calls_no_model(service):
     response = service.client.get("/v1/coverage/msft", headers=BOT)
 
