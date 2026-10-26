@@ -487,6 +487,13 @@ IAM-authenticated function URL, with per-caller and global daily spend caps enfo
 Claude call. Callers treat memos as advisory, fire-and-forget, and never inside a backtest. A public endpoint is not planned: the service stays local or behind
 the IAM-signed function URL (`docs/ARCHITECTURE.md`, `docs/CALLING.md`).
 
+## Next: a Strands follow-up chat (planned)
+
+Follow-ups answered by a Strands agent that chooses its own tools (wrapping the existing
+metrics, retrieval, peer and news code), measured against the fixed-pipeline `--chat` on a
+pre-registered question set. Interactive CLI chat only: the memo pipeline and every automated
+caller (API, Lambda, batch, AuraTrade) are unchanged. Plan: `docs/STRANDS_PLAN.md`.
+
 ## 7. Known traps
 
 - **XBRL values are in raw units, not millions.** Format at render time only.
