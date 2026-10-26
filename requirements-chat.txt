@@ -1,0 +1,5 @@
+# The interactive Strands chat mode only (docs/STRANDS_PLAN.md). Kept out of
+# requirements.txt so the Lambda image never carries it.
+# No [anthropic] extra: it pins anthropic<1.0, and this project runs 1.6.0
+# (requirements.txt). Strands' adapter works with 1.6.0; scripts/strands_spike.py checks it.
+strands-agents==1.62.0

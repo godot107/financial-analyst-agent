@@ -41,6 +41,13 @@ The house rules hold in the new mode exactly as in the old one:
   still applies.
 - **Tests never touch the network or the API.** The Strands agent runs against a fake
   model in tests.
+- **The Claude API directly, nothing else.** The agent talks only to Anthropic, which keeps it
+  cloud-agnostic, so the Strands mode uses `AnthropicModel` and nothing else: no `BedrockModel`,
+  no AgentCore, no AWS-only Strands feature. Strands is open source and runs anywhere. Here it
+  is only a loop around the same `anthropic` client, not a new provider. A test asserts that the
+  chat agent's model is an `AnthropicModel`. If the extra layer ever costs more than it gives
+  (the `anthropic<1.0` pin in Step 0 is the first sign of that), dropping Strands means
+  writing the tool loop by hand against the SDK, which `llm.py` already does for one-shot calls.
 - **LLM isolation:** the new module goes on the allow-list in `tests/test_llm_isolation.py`,
   and that test also starts guarding `import strands`.
 
@@ -66,10 +73,9 @@ is hit once.
 ### Model settings (match `config.yaml`)
 
 `strands.models.anthropic.AnthropicModel`: `model_id: claude-opus-5`, `max_tokens` from a
-new `nodes.chat_agent` entry, and `params={"thinking": {"type": "adaptive"},
-"output_config": {"effort": ...}}`. **Step 0 confirms** that `params` passes `output_config`
-through (the docs show `thinking` but don't mention `output_config`) and how to keep refusal
-fallbacks (the beta header). If either can't be done, record it as a finding, not a workaround.
+new `nodes.chat_agent` entry, and `params` carrying `thinking` (adaptive), `output_config`
+(effort), and the refusal fallback (`extra_headers` beta + `extra_body` `fallbacks`). All
+three confirmed in Step 0.
 
 ### Hooks (Strands' place for the house rules)
 
@@ -83,6 +89,34 @@ fallbacks (the beta header). If either can't be done, record it as a finding, no
 - **Trace:** every hook writes into the run's `Tracer`, so a Strands run record looks like a
   pipeline one (tool calls instead of nodes). `result.metrics` (`accumulated_usage`,
   `cycle_durations`, `tool_metrics`) gives the totals.
+
+## Step 0 findings (2026-10-26, free)
+
+The spike drove `strands-agents` 1.62.0 through a fake HTTP transport: a scripted model, no
+network, no key, no spend.
+
+- **Version pin conflict.** The `strands-agents[anthropic]` extra pins `anthropic<1.0`, but
+  this project runs `anthropic==1.6.0`. With 1.6.0 forced in, the whole loop worked: tool
+  call, cancelled tool call, resume, final answer. `pip check` does not flag the conflict
+  because the pin sits on an extra. So: install `strands-agents` *without* the extra, in
+  `requirements-chat.txt`, and keep a fake-model test that would catch an adapter break.
+- **anthropic 1.x uses `httpx2`.** A test transport must be `httpx2.MockTransport` inside an
+  `httpx2.AsyncClient`. A plain `httpx` client is rejected with a TypeError.
+- **`params` passes through untouched.** `thinking` (adaptive, summarized), `output_config`
+  (effort) and the refusal fallback (`extra_headers` beta + `extra_body` `fallbacks`) all
+  arrive in the request body and headers exactly as given. The Strands mode can match
+  `config.yaml` call for call.
+- **`@tool` builds the schema from type hints + the Google-style `Args:` docstring.** The schema
+  is **not strict**, and has no enum for metric ids. So `get_metrics` must check ids against
+  the registry itself and return a readable error, where the pipeline relies on the strict
+  enum `choose_metrics`.
+- **`cancel_tool` works as a cap.** The model receives the message as an `is_error`
+  tool_result and goes on to answer.
+- **`AfterInvocationEvent.resume` works as check-and-retry.** The problems arrive as a new
+  user message, and the next answer replaces the result.
+- **Metrics:** `accumulated_usage` (`inputTokens`/`outputTokens`) and `cycle_durations` are
+  there. `tool_metrics` counts only calls that **ran** (a cancelled call doesn't appear), so
+  the hook counts attempts itself for the trace.
 
 ## Evaluation (pre-registered before any paid run)
 
@@ -111,10 +145,7 @@ running, the same as every live run, with the free steps kept separate from the 
 
 ## Steps
 
-0. **Read the docs and run a spike (free).** Install `strands-agents[anthropic]` in the project venv
-   and confirm the `params` pass-through, the fallback beta, the hook event fields and the
-   `@tool` signature/return format against the installed version. Write the confirmed details
-   here.
+0. ✅ **Read the docs and run a spike (free).** See "Step 0 findings" above.
 1. **Tools + fake-model tests (free).** The tools, with unit tests on fixtures. Strands
    driven by a fake model that calls tools in a scripted order.
 2. **Hooks (free).** The spend guard, tool cap, check-and-retry and trace. Tests: a scripted
