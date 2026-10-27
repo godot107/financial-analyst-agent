@@ -173,8 +173,17 @@ running, the same as every live run, with the free steps kept separate from the 
    is corrected, one that keeps leaking gives up, an unsupported citation is sent back, a
    second tool call past a cap of 1 is cancelled, a $0.015 limit stops the third call, and
    follow-ups keep the conversation within the turn cap.
-3. **CLI flag + question set (free).** `--chat-mode strands`, `evals/chat_followups.yaml`, and
-   a `--dry-run` that prints both arms' plans.
+3. ✅ **CLI flag + question set (free).**
+   - `--chat-mode strands` (implies `--chat`): turn 1 is the usual pipeline memo, then
+     `StrandsChatSession.seed` hands it to the agent, which answers the follow-ups. Peers
+     and news are fetched only if the agent asks.
+   - `evals/chat_followups.yaml`: pre-registered 2026-10-27, 12 follow-ups (narrow / open /
+     off_plan / trap) over MSFT, COST, JPM, each with an `expect` line for the grader.
+   - `evals/chat_compare.py`: by default it shows the plan and the estimate ($2.34, $0).
+     `--spend` runs both arms from one shared opening memo per company and writes
+     `results.json`, `grading.md` (A/B shuffled, reproducible seed) and `grades.yaml`.
+     `--score DIR` unblinds the grades and applies the decision rule. The paid path is
+     tested end to end on fakes (`tests/test_chat_compare.py`).
 4. **Paid comparison (ask first).** Both arms on the question set.
 5. **Write up.** Results table in the README, a section in BLOG-2 or a new post, and the
    decision as the rule above decides it.

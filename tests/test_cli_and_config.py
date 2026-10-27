@@ -50,6 +50,12 @@ def test_dry_run_reports_settings_and_spends_nothing(capsys):
     assert "nothing was spent" in output
 
 
+def test_strands_chat_mode_dry_run_names_the_mode(capsys):
+    assert main(["msft", "How liquid is Microsoft?", "--chat-mode", "strands", "--dry-run"]) == 0
+    output = capsys.readouterr().out
+    assert "Mode:     strands" in output and "chat_agent:" in output
+
+
 def test_a_live_run_without_an_api_key_stops_before_calling_anything(capsys, monkeypatch):
     """No key means no call. .env is neutralised too, so this can't reach the API."""
     monkeypatch.setattr("fin_analyst.config.load_dotenv", lambda *a, **k: None)

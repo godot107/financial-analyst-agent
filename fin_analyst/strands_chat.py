@@ -142,6 +142,7 @@ class StrandsChatSession:
         self.tracer = tracer or Tracer()
         self.model_id = settings.nodes["chat_agent"].model
         self.verify_spent_usd = 0.0
+        self.earlier_usd = 0.0  # what `seed`'s first answer cost, before this agent existed
         self.turns = 0
 
         # Per question: reset by `ask`.
@@ -169,7 +170,22 @@ class StrandsChatSession:
         """The agent's calls plus the claim checks', for the whole conversation."""
         usage = self.agent.event_loop_metrics.accumulated_usage
         agent_cost = self.settings.cost_usd(self.model_id, usage["inputTokens"], usage["outputTokens"])
-        return agent_cost + self.verify_spent_usd
+        return agent_cost + self.verify_spent_usd + self.earlier_usd
+
+    def seed(self, question: str, answer: str, cost_usd: float = 0.0) -> None:
+        """Start from a first answer the pipeline already gave: it counts as a turn.
+
+        The agent sees that exchange as its own earlier turn, as ChatSession's
+        history does, and the budget guard covers what it cost.
+        """
+        if self.turns_left <= 0:
+            raise RuntimeError("no turns left to seed")
+        self.agent.messages.extend([
+            {"role": "user", "content": [{"text": question}]},
+            {"role": "assistant", "content": [{"text": answer}]},
+        ])
+        self.turns += 1
+        self.earlier_usd += cost_usd
 
     def ask(self, question: str) -> ChatAnswer:
         if self.turns_left <= 0:

@@ -1,0 +1,86 @@
+# Follow-up questions for the pipeline-vs-Strands chat comparison (docs/STRANDS_PLAN.md).
+#
+# PRE-REGISTERED 2026-10-27, before either arm has run. Don't edit the questions or the
+# rule after the first paid run; add a new file for a second round instead.
+#
+# Each company has one opening question. Its pipeline memo is produced once and given
+# to both arms as turn 1, so the arms differ only in how they answer the follow-up.
+#
+# kinds:
+#   narrow    - one metric the registry has; both arms should manage
+#   open      - "what about X": the arm has to decide which metrics and passages matter
+#   off_plan  - needs a tool the pipeline chat isn't set up for (news, a peer it wasn't
+#               given); the pipeline should say it can't, the agent may fetch it
+#   trap      - the right answer is a refusal (a ratio that doesn't apply)
+#   expect    - what a good answer does, for the blind grader. Not shown to either arm.
+
+decision_rule: >
+  Strands earns a place in the CLI only if its mean answer grade is at least the
+  pipeline's AND its first-draft pass rate is no lower, at no more than 2x the
+  pipeline's cost per follow-up. Otherwise it stays a written-up comparison.
+
+grading: >
+  0 = wrong, misleading, or doesn't answer; 1 = answers but misses something the
+  expect line names; 2 = answers what was asked, as the expect line describes.
+  Graded blind: the sheet shows A/B in random order per question.
+
+companies:
+  MSFT:
+    opening: How liquid is Microsoft?
+    follow_ups:
+      - id: msft-narrow
+        kind: narrow
+        question: What is its quick ratio?
+        expect: gives the quick ratio and its year-over-year move, as defined (cash, short-term investments and receivables over current liabilities)
+      - id: msft-open
+        kind: open
+        question: What about its debt?
+        expect: picks debt ratios (debt to equity, debt to capital or interest coverage), reports the moves, no rule-of-thumb judgement
+      - id: msft-news
+        kind: off_plan
+        question: Has anything happened since the filing that matters for its liquidity?
+        expect: either cites dated press releases and says they are after the 10-K, or says plainly this conversation has no post-filing news
+      - id: msft-peer
+        kind: off_plan
+        question: How does that compare with Alphabet?
+        expect: either compares at each company's own year end and says the dates differ, or says plainly no peer comparison is available here
+
+  COST:
+    opening: How profitable is Costco?
+    follow_ups:
+      - id: cost-narrow
+        kind: narrow
+        question: What is its return on equity?
+        expect: gives ROE and its move, with the three DuPont components
+      - id: cost-open
+        kind: open
+        question: Why did margins move?
+        expect: explains only from cited filing passages, or says the filing does not explain it; no invented reasons
+      - id: cost-news
+        kind: off_plan
+        question: Any news since the 10-K?
+        expect: either cites dated press releases as post-filing, or says plainly there is no news in this conversation
+      - id: cost-peer
+        kind: off_plan
+        question: How does it compare with Walmart?
+        expect: either compares at each company's own year end and says the dates differ, or says plainly no peer comparison is available here
+
+  JPM:
+    opening: How efficient is JPMorgan?
+    follow_ups:
+      - id: jpm-narrow
+        kind: narrow
+        question: What is its loans-to-deposits ratio?
+        expect: gives loans to deposits and its move
+      - id: jpm-open
+        kind: open
+        question: What about credit risk?
+        expect: uses credit cost to loans (and may cite risk-factor passages); no rule-of-thumb judgement
+      - id: jpm-trap
+        kind: trap
+        question: What is its current ratio?
+        expect: says the current ratio doesn't apply to a bank's unclassified balance sheet, and computes nothing in its place
+      - id: jpm-peer
+        kind: off_plan
+        question: How does it compare with Bank of America?
+        expect: either compares bank ratios at each company's own year end and says the dates differ, or says plainly no peer comparison is available here

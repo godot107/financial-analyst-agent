@@ -72,6 +72,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="keep asking follow-ups about the same company (a few turns, one shared budget)",
     )
     parser.add_argument(
+        "--chat-mode",
+        choices=["pipeline", "strands"],
+        default="pipeline",
+        help="who answers follow-ups: the fixed workflow, or a Strands agent that picks its "
+        "own tools (implies --chat; needs requirements-chat.txt; see docs/STRANDS_PLAN.md)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="print each step as it happens, with a summary of Claude's thinking",
@@ -88,14 +95,22 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = load_settings()
     ticker = args.ticker.upper()
+    if args.chat_mode == "strands":
+        args.chat = True
 
     print(f"Ticker:   {ticker}" + (f" vs {args.peer.upper()}" if args.peer else ""))
     print(f"Question: {args.question}")
+    width = max(9, *(len(name) + 2 for name in settings.nodes))
     for name, node in settings.nodes.items():
-        print(f"{name + ':':9s} {node.model}, effort {node.effort}, max {node.max_tokens} tokens")
+        print(f"{name + ':':{width}s}{node.model}, effort {node.effort}, max {node.max_tokens} tokens")
     print(f"Stops if a run passes ${settings.max_usd_per_run:.2f}")
     if args.chat:
         print(f"Chat:     up to {settings.chat_max_turns} questions, sharing that budget")
+    if args.chat_mode == "strands":
+        print(
+            "Mode:     strands - the first answer is the usual memo; a Strands agent answers "
+            f"follow-ups, up to {settings.chat_max_tool_calls} tool calls each"
+        )
 
     if args.dry_run:
         print("\nDry run: nothing was called and nothing was spent.")
@@ -127,6 +142,10 @@ def main(argv: list[str] | None = None) -> int:
     # The trace is always kept in the run record; --verbose also prints it live.
     tracer = Tracer([pretty()] if args.verbose else [])
 
+    if args.chat_mode == "strands":
+        return run_strands_chat(
+            ticker, args.question, analyst, settings, args.peer, fetch_text, tracer, fetch, cache
+        )
     if args.chat:
         return run_chat(ticker, args.question, analyst, settings, args.peer, fetch_text, tracer, fetch)
 
@@ -187,6 +206,68 @@ def run_chat(
 
     print(f"\n[{answered} answer(s), ${analyst.spent_usd:.4f} spent in total]", file=sys.stderr)
     return 0 if answered else 1
+
+
+
+def run_strands_chat(
+    ticker, question, analyst, settings, peer, fetch_text, tracer, fetch, cache
+) -> int:
+    """The first answer is the pipeline's memo; a Strands agent answers the follow-ups.
+
+    Interactive only (docs/STRANDS_PLAN.md): a person reads every answer.
+    """
+    from fin_analyst.chat import ChatSession
+    from fin_analyst.chat_tools import ChatToolbox
+    from fin_analyst.strands_chat import StrandsChatSession
+
+    chat = ChatSession(
+        ticker, analyst, settings, peer_ticker=peer, fetch_text=fetch_text, tracer=tracer,
+        fetch=fetch, describe=describe_filing,
+    )
+    state = chat.ask(question)
+    show(state, analyst)
+    if not state.memo:
+        return 1
+
+    # The agent starts from what the memo's run already fetched; peers and news
+    # are fetched only if it asks for them.
+    toolbox = ChatToolbox(
+        ticker, chat.facts, chat.passages,
+        company=state.filing.company if state.filing else None,
+        fetch_peer=fetch,
+        fetch_news=lambda ticker: fetch_news(ticker, cache=cache),
+    )
+    if chat.peer_ticker:
+        toolbox.peer_ticker, toolbox.peer_facts = chat.peer_ticker, chat.peer_facts
+    agent = StrandsChatSession(toolbox, settings, verifier=analyst, tracer=tracer)
+    agent.seed(question, state.memo, analyst.spent_usd)
+    answered = 1
+
+    while agent.turns_left > 0:
+        try:
+            question = input(f"\n[{agent.turns_left} left] Ask another, or press enter to stop: ").strip()
+        except EOFError:
+            break
+        if not question:
+            break
+        answer = agent.ask(question)
+        if answer.answer:
+            print(answer.answer)
+        else:
+            print(f"No answer: {answer.error}", file=sys.stderr)
+        print(
+            f"\n[{len(answer.drafts)} draft(s), {len(answer.tool_calls)} tool call(s), "
+            f"${answer.cost_usd:.4f} spent]",
+            file=sys.stderr,
+        )
+        answered += answer.answer is not None
+        if answer.error and "over the" in answer.error:
+            break
+    else:
+        print(f"\nThat was the last of {settings.chat_max_turns} questions.", file=sys.stderr)
+
+    print(f"\n[{answered} answer(s), ${agent.spent_usd:.4f} spent in total]", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
