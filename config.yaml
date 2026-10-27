@@ -16,6 +16,12 @@ nodes:
     model: claude-opus-5
     effort: low # judging support against a quoted passage is a reading task
     max_tokens: 1024
+  # The interactive Strands chat (docs/STRANDS_PLAN.md): picks its own tools, then
+  # writes the answer, so one ceiling covers each of its calls.
+  chat_agent:
+    model: claude-opus-5
+    effort: medium
+    max_tokens: 1500
 
 # Return a summary of each call's thinking, for the trace (--verbose, the run
 # record, and the API's job result). Billing is the same either way: thinking is
@@ -45,6 +51,10 @@ max_retries: 2
 # Follow-up questions in `--chat`. Each turn resends the previous answers, so
 # cost grows with the conversation. 5 is a hard ceiling in code, not just here.
 chat_max_turns: 5
+
+# Tool calls the Strands chat agent may make per question, retries included. Past
+# this, a call is cancelled and the agent is told to answer with what it has.
+chat_max_tool_calls: 8
 
 # The HTTP service (fin_analyst/service.py). Caps are checked when a job is
 # submitted, before any Claude call: an open endpoint is an open tab.

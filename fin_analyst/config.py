@@ -37,6 +37,8 @@ class Settings:
     api_global_daily_usd: float = 3.00
     # Ask Claude for a summary of its thinking, for the run's trace.
     thinking_summaries: bool = True
+    # The Strands chat agent's tool calls per question (strands_chat.py).
+    chat_max_tool_calls: int = 8
 
     def cost_usd(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """What one call cost. Thinking tokens are billed as output."""
@@ -70,6 +72,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         api_per_key_daily_usd=float(raw.get("api", {}).get("per_key_daily_usd", 1.00)),
         api_global_daily_usd=float(raw.get("api", {}).get("global_daily_usd", 3.00)),
         thinking_summaries=bool(raw.get("thinking_summaries", True)),
+        chat_max_tool_calls=int(raw.get("chat_max_tool_calls", 8)),
     )
 
     if settings.max_usd_per_run <= 0:
@@ -80,6 +83,8 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         raise ValueError("api daily caps must be greater than 0")
     if not 1 <= settings.chat_max_turns <= CHAT_TURN_CEILING:
         raise ValueError(f"chat_max_turns must be between 1 and {CHAT_TURN_CEILING}")
+    if settings.chat_max_tool_calls < 1:
+        raise ValueError("chat_max_tool_calls must be at least 1")
     for name, node in settings.nodes.items():
         if node.model not in settings.prices:
             raise ValueError(

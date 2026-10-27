@@ -18,6 +18,9 @@ from fin_analyst.metrics import METRICS_BY_ID, MetricResult, describe_metrics
 from fin_analyst.passages import Passage
 from fin_analyst.trace import Tracer
 
+# Refusal fallbacks: a refused call is finished by the fallback model instead.
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
 PLANNER_SYSTEM = """You choose which financial ratios answer a question about one company.
 You never compute, estimate or state a number.
 
@@ -49,17 +52,15 @@ PEER_RULE = """ You also have {peer}'s ratios as {{{{peer.metric_id:year}}}} pla
   compare the two at each company's own latest year end, and say that those dates differ
   rather than implying the periods match."""
 
-WRITER_SYSTEM = """You write a short memo about {ticker} using only its latest 10-K.
-A Python program supplies every number. You never type one.
-
-Refer to numbers only with placeholders:
+# Shared by the memo writer and the chat agent (strands_chat.py): how numbers are
+# written, and the rules for the words around them. Format strings, hence {{{{ }}}}.
+PLACEHOLDER_RULES = """Refer to numbers only with placeholders:
   {{{{metric_id:year}}}}          e.g. {{{{current_ratio:2026}}}}
   {{{{metric_id:year->year}}}}    e.g. {{{{net_margin:2025->2026}}}}
                               renders as "rose 1.2 pts to 36.1%", direction included
-Only the placeholders listed below exist. Anything else is an error.
+"""
 
-Rules:
-- No digits outside a placeholder: no percentages, no multiples. You may name a fiscal year
+WORD_RULES = """- No digits outside a placeholder: no percentages, no multiples. You may name a fiscal year
   in prose when it appears in the data.
 - No rules of thumb, in digits or in words. The data has no benchmark, so never judge a ratio
   against one: not "above parity", "below one", "no longer covers its obligations", "healthy",
@@ -78,12 +79,26 @@ Rules:
   reads as a contradiction.
 - The values below are for your judgment only. Never repeat one as text.
 - Each metric's definition is given with it. Describe a ratio only as defined there.
-- Compare the company with its own prior year.{peer_rule}
+"""
+
+WRITER_SYSTEM = (
+    """You write a short memo about {ticker} using only its latest 10-K.
+A Python program supplies every number. You never type one.
+
+"""
+    + PLACEHOLDER_RULES
+    + """Only the placeholders listed below exist. Anything else is an error.
+
+Rules:
+"""
+    + WORD_RULES
+    + """- Compare the company with its own prior year.{peer_rule}
 - {explain_rule}
 - If a metric is unavailable, say so and give the reason. Never work around it.
 - If the question needs something this data cannot give - a peer comparison, a
   valuation multiple, or a business explanation - say so in one line.
 - About 250 words of markdown, opening with a one-line answer to the question."""
+)
 
 
 VERIFIER_SYSTEM = """You check whether a claim about a company is supported by the filing
@@ -286,7 +301,7 @@ class ClaudeAnalyst:
         try:
             if self.refusal_fallbacks:
                 response = self.client.beta.messages.create(
-                    betas=["server-side-fallback-2026-07-01"], fallbacks="default", **request
+                    betas=[FALLBACK_BETA], fallbacks="default", **request
                 )
             else:
                 response = self.client.messages.create(**request)

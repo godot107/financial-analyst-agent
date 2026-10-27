@@ -44,16 +44,18 @@ def _events(blocks: list[dict], input_tokens: int, output_tokens: int) -> list[d
 
 
 class ScriptedClaude:
-    """Replies in order; `requests` holds what Strands actually sent."""
+    """Replies in order; `requests` and `headers` hold what Strands actually sent."""
 
     def __init__(self, replies: list[list[dict]], input_tokens: int = 1000, output_tokens: int = 200):
         self.replies = replies
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.requests: list[dict] = []
+        self.headers: list[dict] = []
 
     def _handle(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(json.loads(request.content))
+        self.headers.append(dict(request.headers))
         if len(self.requests) > len(self.replies):
             raise AssertionError(f"the agent made call {len(self.requests)}; the script has {len(self.replies)}")
         events = _events(self.replies[len(self.requests) - 1], self.input_tokens, self.output_tokens)

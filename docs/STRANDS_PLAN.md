@@ -83,9 +83,11 @@ three confirmed in Step 0.
   stops the run once it passes the cap.
 - **Tool-call cap:** a `BeforeToolCallEvent` hook sets `cancel_tool` past N calls per turn
   (the `LimitToolCounts` pattern from the Strands hooks docs).
-- **Check and retry:** `AfterInvocationEvent` runs `find_problems` on the answer. If it finds
-  problems, it sets `event.resume` to the list of problems, up to `max_retries` (2), the same
-  as the pipeline's write → check loop.
+- **Check and retry** (built in `ask`, not as a hook): `find_problems`, then the claim check,
+  on the finished answer. Problems go back to the same agent as a new message, up to
+  `max_retries` (2), the same as the pipeline's write → check → verify loop.
+  `AfterInvocationEvent.resume` would also work (Step 0). A plain loop is easier to follow,
+  and hooks are left for what must act *inside* the agent's loop.
 - **Trace:** every hook writes into the run's `Tracer`, so a Strands run record looks like a
   pipeline one (tool calls instead of nodes). `result.metrics` (`accumulated_usage`,
   `cycle_durations`, `tool_metrics`) gives the totals.
@@ -155,8 +157,22 @@ running, the same as every live run, with the free steps kept separate from the 
    `tests/fake_stream.py` is a scripted Claude over an `httpx2` mock transport.
    `test_llm_isolation.py` now also guards `strands`. Tests: `test_chat_tools.py`,
    `test_strands_chat.py` (skipped without `requirements-chat.txt`).
-2. **Hooks (free).** The spend guard, tool cap, check-and-retry and trace. Tests: a scripted
-   model that leaks a digit gets resumed, and one that loops gets cut off.
+2. ✅ **Hooks (free).** `StrandsChatSession` in `strands_chat.py`, with the same `ask` /
+   `turns_left` contract as `ChatSession`:
+   - `build_model` sends `config.yaml`'s new `chat_agent` node (model, effort, max_tokens),
+     adaptive thinking, and the refusal fallback.
+   - Hooks: the spend guard (`BeforeModelCallEvent.cancel`), the tool cap
+     (`chat_max_tool_calls: 8` per question), and the trace.
+   - `ask` runs check → claim check → retry, and saves `runs/<T>-chat-*.json` (+ `.md`).
+   - `CHAT_SYSTEM` shares `PLACEHOLDER_RULES` and `WORD_RULES` with the writer. Those were
+     split out of `WRITER_SYSTEM`, which stays byte-identical.
+
+   Finding: token usage lags one call in `AfterModelCallEvent` but is current in
+   `BeforeModelCallEvent` and when the turn ends, so the guard checks before each call and the
+   trace records tokens per question, not per call. Tests: a scripted model that leaks a digit
+   is corrected, one that keeps leaking gives up, an unsupported citation is sent back, a
+   second tool call past a cap of 1 is cancelled, a $0.015 limit stops the third call, and
+   follow-ups keep the conversation within the turn cap.
 3. **CLI flag + question set (free).** `--chat-mode strands`, `evals/chat_followups.yaml`, and
    a `--dry-run` that prints both arms' plans.
 4. **Paid comparison (ask first).** Both arms on the question set.
