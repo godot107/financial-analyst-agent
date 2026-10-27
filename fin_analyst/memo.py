@@ -12,7 +12,7 @@ Placeholder shapes:
 
 import re
 
-from fin_analyst.metrics import MetricResult, is_unclassified
+from fin_analyst.metrics import METRICS_BY_ID, MetricResult, is_unclassified
 from fin_analyst.news import news_credit
 from fin_analyst.passages import Passage
 
@@ -95,6 +95,37 @@ def _format_change(start: MetricResult, end: MetricResult) -> str:
         return f"was unchanged at {format_value(end)}"
     direction = "rose" if change > 0 else "fell"
     return f"{direction} {size} to {format_value(end)}"
+
+
+def describe_values(metrics: list[MetricResult], prefix: str = "") -> str:
+    """The values and the placeholders that exist, as the writer sees them.
+
+    Each metric carries its definition, because a writer given only a name and a
+    number will describe the formula from habit - and say the quick ratio strips
+    out inventory, which is not how this one is built.
+    """
+    lines = []
+    for metric_id in sorted({m.metric_id for m in metrics}):
+        definition = METRICS_BY_ID[metric_id].description if metric_id in METRICS_BY_ID else ""
+        lines.append(f"{metric_id} - {definition}")
+        for m in sorted(
+            (m for m in metrics if m.metric_id == metric_id), key=lambda m: -m.fiscal_year
+        ):
+            name = f"{{{{{prefix}{m.metric_id}:{m.fiscal_year}}}}}"
+            if m.value is None:
+                lines.append(f"  - {name} = unavailable: {m.reason}")
+            elif m.unit == "percent":
+                lines.append(f"  - {name} = {m.value * 100:.1f}%")
+            else:
+                lines.append(f"  - {name} = {m.value:.2f}x")
+
+    years = sorted({m.fiscal_year for m in metrics}, reverse=True)
+    if len(years) > 1:
+        lines.append(
+            f"Change placeholders also exist between any two of these years: {years}, "
+            "e.g. {{net_margin:" + f"{years[1]}->{years[0]}" + "}}"
+        )
+    return "\n".join(lines)
 
 
 def find_problems(

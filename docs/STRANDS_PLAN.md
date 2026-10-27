@@ -146,8 +146,15 @@ running, the same as every live run, with the free steps kept separate from the 
 ## Steps
 
 0. ✅ **Read the docs and run a spike (free).** See "Step 0 findings" above.
-1. **Tools + fake-model tests (free).** The tools, with unit tests on fixtures. Strands
-   driven by a fake model that calls tools in a scripted order.
+1. ✅ **Tools + fake-model tests (free).** `fin_analyst/chat_tools.py` (`ChatToolbox`, plain
+   Python, no model code) and `fin_analyst/strands_chat.py` (`agent_tools`: bound methods as
+   Strands tools, only the ones the session can use). The toolbox records every metric and
+   passage it hands out, and `check`/`render` use only those, so an answer can't use a
+   placeholder or citation it wasn't given. Peers: one per conversation, fetched once.
+   `describe_values` moved from `llm.py` to `memo.py` so the tools can share it.
+   `tests/fake_stream.py` is a scripted Claude over an `httpx2` mock transport.
+   `test_llm_isolation.py` now also guards `strands`. Tests: `test_chat_tools.py`,
+   `test_strands_chat.py` (skipped without `requirements-chat.txt`).
 2. **Hooks (free).** The spend guard, tool cap, check-and-retry and trace. Tests: a scripted
    model that leaks a digit gets resumed, and one that loops gets cut off.
 3. **CLI flag + question set (free).** `--chat-mode strands`, `evals/chat_followups.yaml`, and

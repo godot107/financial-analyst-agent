@@ -9,8 +9,10 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent.parent / "fin_analyst"
 # server.py builds the real analyst for the HTTP service, as __main__ does for the CLI.
-ALLOWED = {"llm.py", "graph.py", "__main__.py", "server.py", "lambda_handler.py"}
-FORBIDDEN = ("anthropic", "fin_analyst.llm")
+# strands_chat.py builds the interactive chat agent (docs/STRANDS_PLAN.md).
+ALLOWED = {"llm.py", "graph.py", "__main__.py", "server.py", "lambda_handler.py", "strands_chat.py"}
+# Strands is a model client too: its Agent calls Claude.
+FORBIDDEN = ("anthropic", "fin_analyst.llm", "strands", "fin_analyst.strands_chat")
 
 
 def imported_names(source: str) -> set[str]:
@@ -58,4 +60,7 @@ def test_checker_catches_each_import_style():
     assert forbidden_imports("from fin_analyst import llm")
     assert forbidden_imports("from .llm import call_claude")
     assert forbidden_imports("from . import llm")
+    assert forbidden_imports("from strands import Agent")
+    assert forbidden_imports("from strands.models.anthropic import AnthropicModel")
+    assert forbidden_imports("from fin_analyst.strands_chat import agent_tools")
     assert not forbidden_imports("import pandas\nfrom fin_analyst.metrics import compute")
