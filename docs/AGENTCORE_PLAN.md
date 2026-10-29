@@ -307,3 +307,21 @@ Runtime within **2 checks** of the Lambda's (one run varies by about ±2, measur
 **If it passes: Lambda teardown plan.** AuraTrade moves from the function URL (SigV4) to
 `InvokeAgentRuntime` with `runtimeUserId` (a change in its private repo, with its own test), one
 week of both stacks serving, then `deploy/99_teardown.sh` for the Lambda stacks and SSM secrets.
+
+## Phase 2 results: Runtime with the Claude API (2026-10-29)
+
+Deployed: `fin-analyst-agentcore-build` (arm64 image `27f85e2` built by CodeBuild on ARM) and
+`fin-analyst-agentcore-app` (Runtime READY, endpoint `live`, jobs bucket, secret + Identity
+credential provider); 15 resources, 0 tag problems. The key reached the container only through
+AgentCore Identity (`runtimeUserId` → workload token → `GetResourceApiKey`).
+
+- **First memo** (MSFT liquidity): $0.052, 41.5 s end to end including a cold start; same shape
+  and rules as the Lambda's memos.
+- **Gold set through the Runtime** (`gold.py --spend --runtime`, `runs/gold-runtime-20261029T183545Z`):
+  **41/43**, $0.65, all 12 published, 11/12 first drafts. Misses: JPM liquidity didn't say the ratio
+  doesn't apply (the same miss Opus 5 had locally), TRV needed 3 drafts.
+  **Parity: PASS** (bar 36; the local Opus 5 run scored 38, so within noise either way).
+- **Latency, submit → finished memo:** p50 20.4 s, max 52.8 s (TRV, 3 drafts).
+
+Still open before the decision: Lambda latency measured the same way (the 10-23 memo took ~17 s,
+one sample), cost at rest after 7 idle days (from 2026-10-29), and the glue-code count.
