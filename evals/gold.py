@@ -203,12 +203,19 @@ def lambda_invoker(poll_seconds: float = 1.0, limit: float = 600.0):
     spec.loader.exec_module(call)
 
     def invoke(request: dict) -> dict:
-        status, accepted = call.call("POST", "/v1/memos", request)
+        # A submission is never retried: if it went through, a retry would pay twice.
+        try:
+            status, accepted = call.call("POST", "/v1/memos", request)
+        except OSError as failed:  # urllib's URLError and socket timeouts
+            return {"status": "failed", "error": f"submission not confirmed: {failed}"}
         if status != 202:
             return {"status": "failed", "error": f"HTTP {status}: {accepted}"}
         started = time.monotonic()
         while time.monotonic() - started < limit:
-            status, job = call.call("GET", accepted["status_url"])
+            try:  # a poll is free and safe to repeat; a dropped one just waits for the next
+                status, job = call.call("GET", accepted["status_url"])
+            except OSError:
+                status, job = None, None
             if status == 200 and job["status"] in ("done", "failed"):
                 return job
             time.sleep(poll_seconds)
