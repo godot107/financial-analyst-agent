@@ -271,3 +271,12 @@ otherwise, same 12 questions, same filings (cached), Opus 4.5 through the global
 **Pass bar, fixed now:** at least **37/43** checks (within one of Opus 5's 38) **and all 12 memos
 published**. Cost cap $1.00 (`--max-usd`). Pass → decision rule 1 holds and Phase 2 starts; fail →
 the model blocks the move, as recorded above, and no further model retries are run.
+
+**Retry result: FAIL** (`runs/gold-20261029T173945Z`, $0.64): **34/43**, 11/12 memos published.
+Thinking fixed the MSFT interest-coverage memo (first draft, no "comfortably"), but a new failure
+appeared: the JPM efficiency memo gave up after 3 drafts because the claim check kept catching a
+claim that inverted the direction of a change in the cited passage (the guardrail worked; the
+memo didn't). Rewrites rose from 4 to 8; COST still 3 years. Across the two Opus 4.5 runs the score
+moved 36 → 34, so one run varies by about ±2 checks; Opus 5's 38 is also one run.
+**As registered: the model blocks the move. No further model retries, no Lambda teardown.** The
+config keeps the default of no thinking on Bedrock (the better of the two Opus 4.5 arms).

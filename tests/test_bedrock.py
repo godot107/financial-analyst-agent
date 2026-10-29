@@ -114,6 +114,7 @@ def test_the_client_matches_the_provider(bedrock, monkeypatch):
 
 
 def test_opus_45_gets_effort_through_its_beta_and_manual_thinking_when_writing(bedrock):
+    bedrock.bedrock_thinking["write"] = 2048  # the retry arm; off in config.yaml
     client = FakeClient(reply(text("ok")))
     ClaudeAnalyst(bedrock, client=client).write_draft("MSFT", "q", [], [])
     api, request = client.requests[0]
@@ -139,7 +140,7 @@ def test_a_thinking_budget_below_the_minimum_is_refused(tmp_path, monkeypatch):
 
     monkeypatch.setenv("FIN_ANALYST_PROVIDER", "bedrock")
     config = tmp_path / "config.yaml"
-    config.write_text(CONFIG_PATH.read_text().replace("    write: 2048", "    write: 500"))
+    config.write_text(CONFIG_PATH.read_text().replace("thinking_budget: {}", "thinking_budget: {write: 500}"))
     with pytest.raises(ValueError, match="at least 1024"):
         load_settings(config)
 
