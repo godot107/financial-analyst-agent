@@ -325,3 +325,31 @@ AgentCore Identity (`runtimeUserId` → workload token → `GetResourceApiKey`).
 
 Still open before the decision: Lambda latency measured the same way (the 10-23 memo took ~17 s,
 one sample), cost at rest after 7 idle days (from 2026-10-29), and the glue-code count.
+
+**Lambda, same method** (`gold.py --spend --lambda`, `runs/gold-lambda-20261029T184702Z`): 39/43,
+$0.75, p50 18.5 s, max 50.3 s. (A first attempt died on a dropped HTTPS poll after 2 memos, $0.13;
+polls now retry, submissions never do.)
+
+**Latency condition as registered: FAIL** — Runtime max 52.8 s vs Lambda 50.3 s (p95 by nearest
+rank with 12 memos is the max). Per question with the same draft count (n=10), Runtime − Lambda,
+median: end to end +1.8 s; inside the graph −0.8 s (the arm64 container does the work slightly
+faster); Claude time −0.4 s; **outside the graph +2.7 s**. The max is set by TRV, 3 drafts on both
+sides, where the Claude API itself took 41.5 s vs 33.6 s.
+
+### Latency amendment (registered 2026-10-29, after seeing the result above, before re-measuring)
+
+Openly an amendment, made because the registered metric measured the wrong thing: with 12 memos,
+p95 is one memo, and its value is set by Claude API variance (8 s on the same question), not by the
+platform. The cause of the real platform gap is also known: every memo opened a new Runtime
+session (a fresh microVM, and a fresh key fetch from Identity), while the Lambda reuses warm
+containers.
+
+- **Fix first:** a caller reuses one Runtime session for its memos (`evals/gold.py --runtime` and
+  `deploy/agentcore/invoke.py` per run; AuraTrade per screen), so the container and key stay warm
+  within the 300 s idle timeout. Client-side only; no redeploy.
+- **Metric:** platform overhead = end-to-end seconds as the caller sees them − the graph's own
+  span (last trace event). Lambda polls every 0.25 s so polling adds at most a quarter second.
+- **Sample, fixed now:** the first 6 gold questions (MSFT x4, COST x2) on each side. Runtime now;
+  Lambda after 00:00 UTC, when its $1/day per-key cap resets (today: $0.88 used). Cost ≈ $0.35 each.
+- **Pass bar:** median Runtime overhead ≤ median Lambda overhead + 1.0 s. The registered p95 result
+  above stays on the record as a FAIL either way.
