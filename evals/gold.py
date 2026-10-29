@@ -5,6 +5,7 @@ Two levels, because they cost very different amounts:
     python evals/gold.py --free     # figures and ratios against the filings' own text. SEC data only, $0
     python evals/gold.py            # show what the full run would ask and what it may spend
     python evals/gold.py --spend    # the full workflow for every question, about $0.05 each
+    python evals/gold.py --spend --runtime   # the same, each memo through AgentCore Runtime
 
 The free level checks what Python is responsible for: that each line item came
 from the right tag, and that each ratio is the textbook formula over those
@@ -112,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--spend", action="store_true", help="run every question through Claude")
     parser.add_argument("--max-usd", type=float, default=1.0, help="stop the full run past this (default 1.00)")
     parser.add_argument("--only", metavar="TICKER", help="just this company's questions")
+    parser.add_argument("--runtime", action="store_true",
+                        help="send each question to the AgentCore Runtime instead of running it here")
     args = parser.parse_args(argv)
 
     load_dotenv(ROOT / ".env")
@@ -131,6 +134,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{len(questions)} questions, about ${len(questions) * ESTIMATE_PER_QUESTION:.2f}. "
               f"Run with --spend to ask them (stops past ${args.max_usd:.2f}).")
         return 0
+
+    if args.runtime:
+        return run_on_runtime(questions, args.max_usd)
 
     from fin_analyst.config import load_settings
     from fin_analyst.edgar import describe_filing
@@ -166,6 +172,39 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "gold.json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Memos, run records and grades: {out.relative_to(ROOT)}")
+    return 0 if passed == len(all_rows) else 1
+
+
+def run_on_runtime(questions: list[dict], max_usd: float, invoke=None) -> int:
+    """The paid level through AgentCore Runtime: same questions, same grader, the memo
+    written in the cloud. Run records stay in the Runtime's jobs bucket; grades come here."""
+    from fin_analyst.agentcore_client import as_state, invoke_memo
+
+    invoke = invoke or (lambda request: invoke_memo(request, caller="gold"))
+    out = ROOT / "runs" / f"gold-runtime-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
+    spent, all_rows, record = 0.0, [], []
+    for case in questions:
+        if spent >= max_usd:
+            print(f"\nStopped: ${spent:.4f} spent, over the ${max_usd:.2f} limit.")
+            break
+        print(f"\n{case['ticker']}: {case['question']}")
+        job = invoke({"ticker": case["ticker"], "question": case["question"],
+                      "filings": case.get("filings", 1)})
+        cost = float(job.get("cost_usd") or 0.0)
+        spent += cost
+        rows = grade_question(case, as_state(job))
+        print_rows(rows)
+        print(f"  ${cost:.4f}  job {job.get('id')}")
+        all_rows += rows
+        record.append({**case, "cost_usd": cost, "job": job.get("id"), "drafts": (job.get("result") or {}).get("drafts"),
+                       "memo": job.get("memo"),
+                       "grades": [{"check": w, "passed": ok, "detail": d} for w, ok, d in rows]})
+
+    passed = sum(ok for _, ok, _ in all_rows)
+    print(f"\n{passed}/{len(all_rows)} checks passed across {len(record)} questions, ${spent:.4f}.")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "gold.json").write_text(json.dumps(record, indent=2) + "\n")
+    print(f"Grades and memos: {out.relative_to(ROOT)}")
     return 0 if passed == len(all_rows) else 1
 
 

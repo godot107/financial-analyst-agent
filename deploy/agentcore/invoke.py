@@ -10,9 +10,9 @@ Ask Willie before running it.
 import argparse
 import json
 import sys
-import uuid
+from pathlib import Path
 
-STACK = "fin-analyst-agentcore-app"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # the project root, for fin_analyst
 
 
 def main(argv=None) -> int:
@@ -23,8 +23,7 @@ def main(argv=None) -> int:
     parser.add_argument("--yes", action="store_true", help="don't ask before spending")
     args = parser.parse_args(argv)
 
-    import boto3
-
+    from fin_analyst.agentcore_client import invoke_memo
     from fin_analyst.service import MemoRequest
 
     request = MemoRequest(ticker=args.ticker, question=args.question,
@@ -34,20 +33,7 @@ def main(argv=None) -> int:
         print("Nothing sent.")
         return 0
 
-    outputs = boto3.client("cloudformation").describe_stacks(StackName=STACK)["Stacks"][0]["Outputs"]
-    out = {o["OutputKey"]: o["OutputValue"] for o in outputs}
-    response = boto3.client("bedrock-agentcore").invoke_agent_runtime(
-        agentRuntimeArn=out["RuntimeArn"],
-        qualifier=out["EndpointName"],
-        runtimeSessionId=f"memo-{uuid.uuid4()}",  # 33+ characters; one session per memo
-        # Naming a user makes Runtime hand the container a workload access token, which
-        # AgentCore Identity exchanges for the Claude API key.
-        runtimeUserId="cli",
-        contentType="application/json",
-        accept="application/json",
-        payload=json.dumps({**request.model_dump(), "caller": "cli"}).encode(),
-    )
-    job = json.loads(response["response"].read())
+    job = invoke_memo(request.model_dump(), caller="cli")
     print(job.get("memo") or json.dumps(job, indent=2))
     print(f"\nstatus {job.get('status')}, cost ${job.get('cost_usd', 0):.4f}, job {job.get('id')}")
     return 0 if job.get("status") == "done" else 1
