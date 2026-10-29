@@ -240,3 +240,24 @@ At the v2 rates, 1 vCPU and 2 GB for a 60 s memo is under $0.003 of platform cos
 **Next (Phase 1, paid, ask first):** run the probe (≤ $0.09); deploy `-iam` as admin (free; the
 budget and profiles cost nothing at rest); paid gold set on Opus 4.5 locally vs the latest Opus 5
 scores.
+
+## Phase 1 results (2026-10-29)
+
+- **Probe** (`runs/bedrock_probe_20261029-121302.json`, $0.012): every `bedrock.models` claim holds.
+  Opus 4.5: effort OK, strict forced tool OK, Converse OK. Haiku 4.5: effort rejected ("does not
+  support the effort parameter"), the rest OK. Both: thinking with a forced tool rejected, adaptive
+  thinking rejected. Thinking stays off on Bedrock.
+- **`fin-analyst-agentcore-iam` deployed** (by Willie, as admin): 6 resources, 0 tag problems
+  (`check_tags.py`); Opus 4.5 profile ACTIVE; budget $5 on `user:component$agentcore`
+  (`component` was already an active cost allocation tag).
+- **Gold set, same code, same filings, same day** (12 questions, 43 checks):
+
+  | | Score | Cost | Memos published | First-draft passes | Content checks missed |
+  |---|---|---|---|---|---|
+  | Opus 5, Claude API (`runs/gold-20261029T172343Z`) | **38/43** | $0.78 | 12/12 | 8/12 | JPM liquidity didn't say the ratio doesn't apply |
+  | Opus 4.5, Bedrock (`runs/gold-20261029T171406Z`) | **36/43** | $0.51 | 11/12 | 8/12 | MSFT interest coverage: no memo after 3 drafts ("comfortably"); COST leverage: 3 years, not 4; AAPL interest: didn't say unavailable |
+
+  **Decision rule 1 fails:** Opus 4.5 is 2 checks behind (the rule allows 1). Retries were equal
+  (4 each); the gap is in content: 3 misses vs 1, and one memo not published. Opus 4.5 cost 35%
+  less. One run each, so the gap is within noise, but the rule was fixed in advance and is applied
+  as written: **the model, not the platform, blocks the move. No Lambda teardown.**
