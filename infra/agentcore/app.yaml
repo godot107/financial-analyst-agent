@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  fin-analyst on AgentCore Runtime (docs/AGENTCORE_PLAN.md): the memo service's
+  container, Claude through tagged Bedrock inference profiles, its own jobs bucket.
+  Runs next to the Lambda stack (fin-analyst-app), never instead of it, until the
+  plan's decision. Deployed by deploy/agentcore/02_app.sh.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fin-analyst
+  ImageUri:
+    Type: String
+    Description: The arm64 image from the <project>-agentcore-build stack, tagged with the commit.
+  RuntimeRoleArn:
+    Type: String
+  Opus45ProfileArn:
+    Type: String
+  Haiku45ProfileArn:
+    Type: String
+  SecUserAgent:
+    Type: String
+    Default: fin-analyst contact@willieman.com
+    Description: SEC rejects downloads without a name and a contact address.
+  IdleSessionSeconds:
+    Type: Number
+    Default: 300  # an idle session may keep billing memory until this ends; keep it short
+    MinValue: 60
+  JobRetentionDays:
+    Type: Number
+    Default: 90
+  Repository:
+    Type: String
+    Default: github.com/godot107/financial-analyst-agent
+
+Resources:
+  JobsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub "${ProjectName}-agentcore-jobs-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ObjectOwnership: BucketOwnerEnforced}]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      # The same retention as the Lambda stack's bucket (infra/app.yaml).
+      LifecycleConfiguration:
+        Rules:
+          - {Id: ExpireOldJobs, Status: Enabled, Prefix: jobs/, ExpirationInDays: !Ref JobRetentionDays}
+          - {Id: ExpireCachedFilings, Status: Enabled, Prefix: cache/filings/, ExpirationInDays: 365}
+          - {Id: ExpireCachedMemos, Status: Enabled, Prefix: cache/memos/, ExpirationInDays: 90}
+          - {Id: ExpireCachedPrices, Status: Enabled, Prefix: cache/prices/, ExpirationInDays: 7}
+          - {Id: AbortIncompleteUploads, Status: Enabled, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}}
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  Runtime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: fin_analyst_memo  # letters, digits and underscores only
+      Description: fin-analyst memo service (LangGraph, Claude on Bedrock)
+      RoleArn: !Ref RuntimeRoleArn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref ImageUri
+      NetworkConfiguration:
+        NetworkMode: PUBLIC  # SEC EDGAR and Bedrock are public endpoints; no VPC to pay for
+      ProtocolConfiguration: HTTP
+      LifecycleConfiguration:
+        IdleRuntimeSessionTimeout: !Ref IdleSessionSeconds
+        MaxLifetime: 3600
+      # No secrets: Claude uses this role; the Alpha Vantage key comes through
+      # AgentCore Identity (Phase 3).
+      EnvironmentVariables:
+        FIN_ANALYST_PROVIDER: bedrock
+        JOBS_BUCKET: !Ref JobsBucket
+        FIN_ANALYST_PROFILE_OPUS_4_5: !Ref Opus45ProfileArn
+        FIN_ANALYST_PROFILE_HAIKU_4_5: !Ref Haiku45ProfileArn
+        SEC_USER_AGENT: !Ref SecUserAgent
+      Tags:
+        project: !Ref ProjectName
+        environment: dev
+        owner: williemaize
+        cost-center: personal
+        managed-by: cloudformation
+        component: agentcore
+        repository: !Ref Repository
+
+  Endpoint:
+    Type: AWS::BedrockAgentCore::RuntimeEndpoint
+    Properties:
+      Name: live
+      AgentRuntimeId: !GetAtt Runtime.AgentRuntimeId
+      AgentRuntimeVersion: !GetAtt Runtime.AgentRuntimeVersion
+      Description: The endpoint callers use; moves to each new runtime version on deploy.
+      Tags:
+        project: !Ref ProjectName
+        environment: dev
+        owner: williemaize
+        cost-center: personal
+        managed-by: cloudformation
+        component: agentcore
+        repository: !Ref Repository
+
+Outputs:
+  RuntimeArn:
+    Value: !GetAtt Runtime.AgentRuntimeArn
+  RuntimeVersion:
+    Value: !GetAtt Runtime.AgentRuntimeVersion
+  EndpointName:
+    Value: live
+  JobsBucket:
+    Value: !Ref JobsBucket

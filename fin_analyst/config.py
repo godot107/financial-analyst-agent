@@ -1,6 +1,6 @@
 """Settings for a run: tunables from config.yaml, secrets from .env."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
 
@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+PROVIDERS = ("anthropic", "bedrock")
 # Every follow-up resends the answers before it, so a long chat costs more per
 # turn than the one before. Five is the most this project will run.
 CHAT_TURN_CEILING = 5
@@ -22,6 +23,20 @@ class NodeSettings:
     model: str
     effort: str
     max_tokens: int
+
+
+@dataclass(frozen=True)
+class BedrockModel:
+    """One Claude model on Amazon Bedrock, and what it supports there."""
+
+    id: str  # the inference profile called when profile_env is unset
+    profile_env: str | None = None  # names the variable with a tagged profile ARN
+    effort: bool = False  # the effort setting (a beta on Opus 4.5)
+    strict_tools: bool = True
+
+    def invoke_id(self) -> str:
+        """The tagged application inference profile if one is set, else the global profile."""
+        return (os.environ.get(self.profile_env) if self.profile_env else None) or self.id
 
 
 @dataclass(frozen=True)
@@ -39,6 +54,15 @@ class Settings:
     thinking_summaries: bool = True
     # The Strands chat agent's tool calls per question (strands_chat.py).
     chat_max_tool_calls: int = 8
+    # "anthropic" (the Claude API) or "bedrock" (Amazon Bedrock).
+    provider: str = "anthropic"
+    bedrock_region: str = "us-east-1"
+    bedrock_models: dict[str, BedrockModel] = field(default_factory=dict)
+
+    def bedrock_model(self, model: str) -> BedrockModel:
+        if model not in self.bedrock_models:
+            raise ValueError(f"{model} has no entry under bedrock.models in config.yaml")
+        return self.bedrock_models[model]
 
     def cost_usd(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """What one call cost. Thinking tokens are billed as output."""
@@ -48,18 +72,36 @@ class Settings:
 
 def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
     # Copies .env into the environment, where the anthropic SDK finds
-    # ANTHROPIC_API_KEY. Variables already set in the shell win.
+    # ANTHROPIC_API_KEY (Bedrock needs none: it uses AWS credentials).
+    # Variables already set in the shell win.
     load_dotenv(PROJECT_ROOT / ".env")
 
     raw = yaml.safe_load(config_path.read_text())
+    provider = os.environ.get("FIN_ANALYST_PROVIDER") or raw.get("provider", "anthropic")
+    if provider not in PROVIDERS:
+        raise ValueError(f"provider must be one of {PROVIDERS}, not {provider!r}")
+    bedrock = raw.get("bedrock") or {}
+    # On Bedrock each node keeps its effort and ceiling but uses the model listed there.
+    swap = bedrock.get("nodes", {}) if provider == "bedrock" else {}
     settings = Settings(
         nodes={
             name: NodeSettings(
-                model=node["model"],
+                model=swap.get(name, node["model"]),
                 effort=node["effort"],
                 max_tokens=int(node["max_tokens"]),
             )
             for name, node in raw["nodes"].items()
+        },
+        provider=provider,
+        bedrock_region=bedrock.get("region", "us-east-1"),
+        bedrock_models={
+            name: BedrockModel(
+                id=model["id"],
+                profile_env=model.get("profile_env"),
+                effort=bool(model.get("effort", False)),
+                strict_tools=bool(model.get("strict_tools", True)),
+            )
+            for name, model in (bedrock.get("models") or {}).items()
         },
         prices={
             model: (float(price["input"]), float(price["output"]))
@@ -95,4 +137,6 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
             raise ValueError(f"node '{name}' has effort '{node.effort}'; use one of {EFFORT_LEVELS}")
         if node.max_tokens <= 0:
             raise ValueError(f"node '{name}' needs a positive max_tokens")
+        if provider == "bedrock" and node.model not in settings.bedrock_models:
+            raise ValueError(f"node '{name}' uses {node.model}, which has no bedrock.models entry")
     return settings

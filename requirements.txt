@@ -19,5 +19,7 @@ mangum>=0.17.0
 
 # Dev
 cfn-lint==1.56.3
+# Local Bedrock runs: `aws login` credentials need botocore's CRT extra (the Runtime uses a role)
+awscrt==0.36.0
 httpx==0.28.1  # FastAPI's TestClient
 pytest==9.1.1

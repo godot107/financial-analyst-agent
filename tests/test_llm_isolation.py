@@ -10,7 +10,10 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parent.parent / "fin_analyst"
 # server.py builds the real analyst for the HTTP service, as __main__ does for the CLI.
 # strands_chat.py builds the interactive chat agent (docs/STRANDS_PLAN.md).
-ALLOWED = {"llm.py", "graph.py", "__main__.py", "server.py", "lambda_handler.py", "strands_chat.py"}
+ALLOWED = {
+    "llm.py", "graph.py", "__main__.py", "server.py", "lambda_handler.py", "strands_chat.py",
+    "agentcore_app.py",  # the AgentCore Runtime entry point (docs/AGENTCORE_PLAN.md)
+}
 # Strands is a model client too: its Agent calls Claude.
 FORBIDDEN = ("anthropic", "fin_analyst.llm", "strands", "fin_analyst.strands_chat")
 

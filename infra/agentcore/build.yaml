@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  fin-analyst on AgentCore: the arm64 image. Its own ECR repository (so these builds
+  never push the Lambda's images out of fin-analyst's keep-five policy), a source
+  bucket, and a CodeBuild project on ARM. Deployed by deploy/agentcore/01_build.sh.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fin-analyst
+  BuildRoleArn:
+    Type: String
+    Description: From the <project>-agentcore-iam stack.
+  Repository:
+    Type: String
+    Default: github.com/godot107/financial-analyst-agent
+
+Resources:
+  ImageRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-agentcore"
+      EmptyOnDelete: true
+      ImageScanningConfiguration: {ScanOnPush: true}
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {"rulePriority": 1, "description": "Drop untagged images after a day",
+               "selection": {"tagStatus": "untagged", "countType": "sinceImagePushed", "countUnit": "days", "countNumber": 1},
+               "action": {"type": "expire"}},
+              {"rulePriority": 2, "description": "Keep the last five images",
+               "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 5},
+               "action": {"type": "expire"}}
+            ]
+          }
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  # The deploy script uploads `git archive HEAD` here; a source zip is only needed
+  # for the one build that reads it.
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub "${ProjectName}-agentcore-build-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ObjectOwnership: BucketOwnerEnforced}]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      LifecycleConfiguration:
+        Rules:
+          - {Id: ExpireSources, Status: Enabled, ExpirationInDays: 7}
+          - {Id: AbortIncompleteUploads, Status: Enabled, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}}
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  BuildLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/codebuild/${ProjectName}-agentcore"
+      RetentionInDays: 14
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  ImageBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ProjectName}-agentcore"
+      Description: Builds Dockerfile.agentcore for linux/arm64 and pushes it, tagged with the commit.
+      ServiceRole: !Ref BuildRoleArn
+      TimeoutInMinutes: 20
+      Source:
+        Type: S3
+        Location: !Sub "${SourceBucket}/source.zip"
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${REPOSITORY_URI%%/*}"
+            build:
+              commands:
+                - docker build -f Dockerfile.agentcore -t "$REPOSITORY_URI:$IMAGE_TAG" .
+            post_build:
+              commands:
+                - docker push "$REPOSITORY_URI:$IMAGE_TAG"
+      Artifacts: {Type: NO_ARTIFACTS}
+      Environment:
+        Type: ARM_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-aarch64-standard:3.0
+        PrivilegedMode: true  # docker build needs it
+        EnvironmentVariables:
+          - {Name: REPOSITORY_URI, Value: !GetAtt ImageRepository.RepositoryUri}
+          - {Name: IMAGE_TAG, Value: set-by-the-deploy-script}
+      LogsConfig:
+        CloudWatchLogs: {Status: ENABLED, GroupName: !Ref BuildLogs}
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+Outputs:
+  RepositoryUri:
+    Value: !GetAtt ImageRepository.RepositoryUri
+  SourceBucket:
+    Value: !Ref SourceBucket
+  ProjectName:
+    Value: !Ref ImageBuild

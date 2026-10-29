@@ -23,6 +23,39 @@ nodes:
     effort: medium
     max_tokens: 1500
 
+# Where Claude runs. "anthropic" calls the Claude API (today's Lambda stack);
+# "bedrock" calls Amazon Bedrock with the machine's AWS credentials or the
+# AgentCore Runtime's role (docs/AGENTCORE_PLAN.md). FIN_ANALYST_PROVIDER overrides it.
+provider: anthropic
+
+# Used only when provider is bedrock. This AWS account can use only Opus 4.5 and
+# Haiku 4.5 on Bedrock (checked 2026-10-29), so each node's model is swapped for
+# the one listed under `nodes`; effort and max_tokens stay as set above.
+bedrock:
+  region: us-east-1
+  nodes:
+    plan: claude-opus-4-5
+    write: claude-opus-4-5
+    verify: claude-opus-4-5
+    chat_agent: claude-opus-4-5
+  # id: the cross-region (global) inference profile, called when profile_env is unset.
+  # profile_env: names the variable holding a tagged application inference profile
+  #   ARN (CloudFormation sets it on the Runtime), so spend is tagged project=fin-analyst.
+  # effort / strict_tools / thinking: what the model supports there. Opus 4.5 has no
+  #   adaptive thinking, and thinking can't be combined with a forced tool, so
+  #   thinking stays off on Bedrock. Confirmed by scripts/bedrock_probe.py.
+  models:
+    claude-opus-4-5:
+      id: global.anthropic.claude-opus-4-5-20251101-v1:0
+      profile_env: FIN_ANALYST_PROFILE_OPUS_4_5
+      effort: true
+      strict_tools: true
+    claude-haiku-4-5:
+      id: global.anthropic.claude-haiku-4-5-20251001-v1:0
+      profile_env: FIN_ANALYST_PROFILE_HAIKU_4_5
+      effort: false
+      strict_tools: true
+
 # Return a summary of each call's thinking, for the trace (--verbose, the run
 # record, and the API's job result). Billing is the same either way: thinking is
 # charged in full whether or not a summary comes back.
@@ -40,6 +73,11 @@ prices_per_million_tokens:
   claude-haiku-4-5:
     input: 1.00
     output: 5.00
+  # Bedrock, global inference profiles (Price List API, 2026-10-07); us. profiles
+  # cost 10% more. Haiku 4.5 is the same price on both.
+  claude-opus-4-5:
+    input: 5.00
+    output: 25.00
 
 # A runaway guard, not a budget. A memo should cost a few cents; if a run passes
 # this, something is wrong and it stops.

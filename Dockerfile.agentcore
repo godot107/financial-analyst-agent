@@ -1,0 +1,25 @@
+# The memo service on Amazon Bedrock AgentCore Runtime (docs/AGENTCORE_PLAN.md).
+# AgentCore runs linux/arm64 images that serve HTTP on 0.0.0.0:8080 (/invocations,
+# /ping). The arm64 image is built by CodeBuild on ARM (infra/agentcore/); a local
+# amd64 build of this same file is only a smoke test.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    FIN_ANALYST_PROVIDER=bedrock
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY config.yaml .
+COPY fin_analyst ./fin_analyst
+
+# Never root. No secrets in the image or the environment: Claude is called with the
+# Runtime's IAM role, and the Alpha Vantage key comes from AgentCore Identity.
+RUN useradd --create-home analyst
+USER analyst
+
+EXPOSE 8080
+CMD ["python", "-m", "fin_analyst.agentcore_app"]

@@ -29,7 +29,7 @@ stack_output() {  # stack_output STACK KEY
 
 scan() {
   say "Linting and cost-scanning the templates"
-  "$ROOT/.venv/bin/cfn-lint" "$ROOT"/infra/*.yaml || die "templates failed lint"
+  "$ROOT/.venv/bin/cfn-lint" "$ROOT"/infra/*.yaml "$ROOT"/infra/agentcore/*.yaml || die "templates failed lint"
   if command -v cloudburn >/dev/null; then
     cloudburn scan "$ROOT/infra" --config "$ROOT/.cloudburn.yml" >/dev/null \
       || die "CloudBurn found a high-severity cost problem: cloudburn scan infra --config .cloudburn.yml"

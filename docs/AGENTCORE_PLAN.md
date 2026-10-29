@@ -1,8 +1,8 @@
 # Plan: the same analyst on Amazon Bedrock AgentCore, measured against the Lambda stack
 
-Status: **planned, not built.** Nothing here has been run, deployed or spent. Drafted 2026-10-29;
+Status: **Phase 0 built (2026-10-29, $0); nothing deployed or spent.** Drafted 2026-10-29;
 revised the same day: **models through Amazon Bedrock, not the Anthropic API; all infrastructure in
-CloudFormation, tagged.**
+CloudFormation, tagged.** Phase 0 results are at the end of this file.
 
 ## The question
 
@@ -76,13 +76,12 @@ Everything is a CloudFormation stack deployed by numbered scripts, as `infra/` +
 today. No console clicks, no starter-toolkit deploys (the toolkit can be used locally in Phase 0
 only).
 
-| Stack | Resources |
-|---|---|
-| `fin-analyst-agentcore-iam` | Runtime execution role (Bedrock invoke on the two inference profiles only, S3 jobs bucket, logs, X-Ray); deployer permissions for `AWS::BedrockAgentCore::*`, under the existing permissions boundary |
-| `fin-analyst-agentcore-models` | Two `AWS::Bedrock::ApplicationInferenceProfile` (Opus 4.5, Haiku 4.5); AWS Budget `fin-analyst-agentcore` $5, tag-filtered, alerts to aws@willieman.com |
-| `fin-analyst-agentcore-app` | `AWS::BedrockAgentCore::Runtime` + `RuntimeEndpoint` (container image from the existing ECR repo, `LifecycleConfiguration` with a short idle timeout), `WorkloadIdentity`, `ApiKeyCredentialProvider` (Alpha Vantage key) |
-| `fin-analyst-agentcore-tools` (Phase 3) | `Gateway`, `GatewayTarget`s, `PolicyEngine` + `Policy` |
-| `fin-analyst-agentcore-evals` (Phase 4) | `Evaluator`s, `OnlineEvaluationConfig` |
+| Stack | Who deploys | Resources |
+|---|---|---|
+| `fin-analyst-agentcore-iam` (`infra/agentcore/iam.yaml`) | admin, once (`deploy/agentcore/00_iam.sh`) | The two tagged `AWS::Bedrock::ApplicationInferenceProfile`s (Opus 4.5, Haiku 4.5); the Runtime role (Bedrock invoke on exactly those profiles, the global profiles they copy and the models behind them; its own S3 bucket; its own ECR repo; logs, traces, metrics; Identity for Phase 3); the CodeBuild role; a deploy policy added to the existing restricted deployer; AWS Budget `fin-analyst-agentcore` $5, filtered to `component=agentcore` |
+| `fin-analyst-agentcore-build` (`build.yaml`) | deployer (`01_build.sh`) | Its own ECR repo `fin-analyst-agentcore` (the Lambda repo keeps only five images), a source bucket, a CodeBuild project on ARM that builds `Dockerfile.agentcore` for arm64 |
+| `fin-analyst-agentcore-app` (`app.yaml`) | deployer (`02_app.sh`, previews unless `--execute`) | `AWS::BedrockAgentCore::Runtime` (container, HTTP, public network, 300 s idle timeout, no secrets in its environment) + `RuntimeEndpoint` `live`, and its own jobs bucket |
+| `-tools` (Phase 3), `-evals` (Phase 4) | deployer | `Gateway`, `GatewayTarget`s, `PolicyEngine` + `Policy`; `Evaluator`s, `OnlineEvaluationConfig` |
 
 **Tags** (`shared/TAGGING.md`), on every stack and every resource that takes them:
 `project=fin-analyst environment=dev owner=williemaize cost-center=personal managed-by=cloudformation
@@ -194,3 +193,50 @@ pieces were worth it on their own (Evaluations or Gateway can be adopted without
   https://cloudburn.io/blog/amazon-bedrock-agentcore-pricing)
 - Model availability and CloudFormation types: AWS CLI on this account, 2026-10-29
   (`bedrock get-foundation-model-availability`, `cloudformation list-types` / `describe-type`).
+
+## Phase 0 results (2026-10-29, $0)
+
+Branch `agentcore`. 352 tests pass, none of them touching AWS or a model.
+
+**Decoupling, provider switch.** `provider: anthropic | bedrock` in `config.yaml` (or
+`FIN_ANALYST_PROVIDER`); the default stays `anthropic`, so the Lambda stack is unchanged.
+- `llm.py`: `make_client` builds `anthropic.AnthropicBedrock` (AWS credentials, no key) or
+  `anthropic.Anthropic`. `_request` gives Bedrock its own shape: the model becomes the tagged
+  profile ARN (`FIN_ANALYST_PROFILE_*`) or the global profile; no thinking; effort through its beta
+  only where the model has it (Opus 4.5, not Haiku 4.5); no refusal fallbacks (a Claude API
+  feature); strict tools unless the model entry says otherwise. Errors name the AWS cause (no
+  model access, no credentials) instead of an API key.
+- `strands_chat.py`: the chat agent gets a Strands `BedrockModel` (Converse API, effort in
+  `additionalModelRequestFields`) on Bedrock, `AnthropicModel` otherwise.
+- Cost: `claude-opus-4-5` priced at $5 / $25 per million (global profile).
+- Local Bedrock runs with `aws login` credentials need botocore's CRT extra (`awscrt` added to
+  the dev requirements); the Runtime uses its role and doesn't.
+
+**Feature differences, from documentation (to confirm with the probe):** Opus 4.5 on Bedrock has
+no adaptive thinking; manual thinking can't be combined with a forced tool (the plan and verify
+steps force one); effort is a beta (`effort-2025-11-24`); structured outputs are listed for Opus
+4.5 on Bedrock, strict tools not explicitly. `scripts/bedrock_probe.py` checks each with tiny real
+calls: 2 models x 7 calls, at most $0.09. **Not run: needs Willie's OK.**
+
+**Runtime entry point.** `fin_analyst/agentcore_app.py`: `/ping` (`HealthyBusy` while a memo runs)
+and `/invocations`, which runs the memo in the request and returns the finished job. It reuses the
+Lambda stack's worker, S3 job ledger, caches and daily caps, so what Runtime replaces is exactly
+the self-invoke and the polling. Refuses to start unless the provider is Bedrock.
+`Dockerfile.agentcore` builds it with no secrets; an amd64 build ran locally (`/ping` healthy,
+bad requests refused). This machine has no arm64 emulation, so the real image is built by
+CodeBuild on ARM.
+
+**CloudFormation.** All three templates pass `cfn-lint` and CloudFormation's `validate-template`;
+CloudBurn reports only the medium storage-class note the Lambda stack already accepts (objects of
+a few KB). Every taggable resource carries the required tags (tested); `deploy/agentcore/check_tags.py`
+checks the deployed resources after `02_app.sh --execute`. AgentCore permissions for the deployer
+are account-wide in the region (`bedrock-agentcore:*`): resource names can't be prefix-scoped.
+
+**Prices (AWS Price List API, us-east-1, 2026-10-29):** Runtime $0.0895 per vCPU-hour and $0.00945
+per GB-hour (a "v2" tier: $0.1276 and $0.0169); Gateway $0.005 per 1,000 calls; Evaluations
+built-in judges $2.40 / $12 per million tokens, custom evaluators $0.0015 each; Policy not listed.
+At the v2 rates, 1 vCPU and 2 GB for a 60 s memo is under $0.003 of platform cost.
+
+**Next (Phase 1, paid, ask first):** run the probe (≤ $0.09); deploy `-iam` as admin (free; the
+budget and profiles cost nothing at rest); paid gold set on Opus 4.5 locally vs the latest Opus 5
+scores.

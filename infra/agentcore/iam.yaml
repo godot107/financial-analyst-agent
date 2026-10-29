@@ -1,0 +1,292 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  fin-analyst on AgentCore (docs/AGENTCORE_PLAN.md), bootstrap: deployed once with
+  admin credentials by deploy/agentcore/00_iam.sh. The two tagged Bedrock inference
+  profiles, the roles that use them, the deployer's extra permissions, and a budget
+  that exists before anything billable does.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fin-analyst
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+  DeployerUserName:
+    Type: String
+    Default: fin-analyst-deployer
+    Description: The restricted deployer from the <project>-iam stack.
+  BudgetEmail:
+    Type: String
+  BudgetLimitUsd:
+    Type: Number
+    Default: 5
+    MinValue: 1
+  Repository:
+    Type: String
+    Default: github.com/godot107/financial-analyst-agent
+
+Resources:
+  # ---------------------------------------------------------------- models
+  # Tagged copies of the global cross-region profiles. Calls go through these so
+  # Bedrock spend shows up under project=fin-analyst, component=agentcore: on-demand
+  # calls can't be tagged any other way. This account can use only Opus 4.5 and
+  # Haiku 4.5 on Bedrock (checked 2026-10-29).
+  Opus45Profile:
+    Type: AWS::Bedrock::ApplicationInferenceProfile
+    Properties:
+      InferenceProfileName: !Sub "${ProjectName}-opus-4-5"
+      Description: fin-analyst memo nodes on Claude Opus 4.5
+      ModelSource:
+        CopyFrom: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/global.anthropic.claude-opus-4-5-20251101-v1:0"
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  Haiku45Profile:
+    Type: AWS::Bedrock::ApplicationInferenceProfile
+    Properties:
+      InferenceProfileName: !Sub "${ProjectName}-haiku-4-5"
+      Description: fin-analyst cheaper arm and judge on Claude Haiku 4.5
+      ModelSource:
+        CopyFrom: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  # ---------------------------------------------------------------- roles
+  # Created here, by admin, with least privilege, so the deployer never needs to
+  # create roles for this work.
+  RuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-agentcore-runtime"
+      Description: What the AgentCore Runtime's container may do.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: bedrock-agentcore.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref AWS::AccountId}
+              ArnLike: {aws:SourceArn: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*"}
+      Policies:
+        - PolicyName: runtime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # The tagged profile, the global system profile it copies, and the model
+              # in whichever region global routing picks.
+              - Sid: Claude
+                Effect: Allow
+                Action: [bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream]
+                Resource:
+                  - !GetAtt Opus45Profile.InferenceProfileArn
+                  - !GetAtt Haiku45Profile.InferenceProfileArn
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/global.anthropic.claude-opus-4-5-20251101-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-opus-4-5-20251101-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:::foundation-model/anthropic.claude-opus-4-5-20251101-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+              - Sid: JobsAndCache
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-agentcore-jobs-*"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-agentcore-jobs-*/*"
+              - Sid: PullOwnImage
+                Effect: Allow
+                Action: [ecr:BatchGetImage, ecr:GetDownloadUrlForLayer]
+                Resource: !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}-agentcore"
+              - Sid: EcrToken
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:*"
+              - Sid: LogGroupsList
+                Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: "*"
+              - Sid: Traces  # AgentCore Observability (OpenTelemetry to X-Ray / CloudWatch)
+                Effect: Allow
+                Action: [xray:PutTraceSegments, xray:PutTelemetryRecords, xray:GetSamplingRules, xray:GetSamplingTargets]
+                Resource: "*"
+              - Sid: Metrics
+                Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals: {cloudwatch:namespace: bedrock-agentcore}
+              # Phase 3: the Alpha Vantage key through AgentCore Identity.
+              - Sid: WorkloadIdentity
+                Effect: Allow
+                Action: [bedrock-agentcore:GetWorkloadAccessToken, bedrock-agentcore:GetWorkloadAccessTokenForJWT,
+                         bedrock-agentcore:GetWorkloadAccessTokenForUserId, bedrock-agentcore:GetResourceApiKey]
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default"
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/fin_analyst*"
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default"
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/apikeycredentialprovider/fin-analyst*"
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  # CodeBuild on ARM builds the arm64 image AgentCore runs (no emulation needed).
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-agentcore-build"
+      Description: What the image build may do.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: codebuild.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref AWS::AccountId}
+      Policies:
+        - PolicyName: build
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Source
+                Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-agentcore-build-*/*"
+              - Sid: PushOwnImage
+                Effect: Allow
+                Action: [ecr:BatchCheckLayerAvailability, ecr:BatchGetImage, ecr:CompleteLayerUpload,
+                         ecr:GetDownloadUrlForLayer, ecr:InitiateLayerUpload, ecr:PutImage, ecr:UploadLayerPart]
+                Resource: !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}-agentcore"
+              - Sid: EcrToken
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-agentcore*"
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-agentcore*:*"
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  # ---------------------------------------------------------------- deployer
+  # Added to the existing restricted deployer: the AgentCore stacks and nothing else.
+  DeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${ProjectName}-agentcore-deploy"
+      Description: What the fin-analyst deployer may do for the AgentCore stacks.
+      Users: [!Ref DeployerUserName]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: OwnStacks
+            Effect: Allow
+            Action: cloudformation:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProjectName}-agentcore-build/*"
+              - !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProjectName}-agentcore-app/*"
+          # AgentCore resource names can't be scoped by prefix in IAM (names use
+          # underscores, ARNs end in a random id), so this is account-wide in this
+          # region. Acceptable for a single-user lab; noted in AGENTCORE_PLAN.md.
+          - Sid: AgentCore
+            Effect: Allow
+            Action: bedrock-agentcore:*
+            Resource: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*"
+          - Sid: AgentCoreServiceLinkedRole
+            Effect: Allow
+            Action: iam:CreateServiceLinkedRole
+            Resource: "*"
+            Condition:
+              StringLike: {iam:AWSServiceName: "*bedrock-agentcore.amazonaws.com"}
+          - Sid: PassRuntimeRole
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !GetAtt RuntimeRole.Arn
+            Condition:
+              StringEquals: {iam:PassedToService: bedrock-agentcore.amazonaws.com}
+          - Sid: PassBuildRole
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !GetAtt BuildRole.Arn
+            Condition:
+              StringEquals: {iam:PassedToService: codebuild.amazonaws.com}
+          - Sid: OwnBuild
+            Effect: Allow
+            Action: [codebuild:CreateProject, codebuild:UpdateProject, codebuild:DeleteProject,
+                     codebuild:BatchGetProjects, codebuild:StartBuild, codebuild:BatchGetBuilds]
+            Resource: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${ProjectName}-agentcore*"
+          - Sid: OwnBuildLogs
+            Effect: Allow
+            Action: [logs:CreateLogGroup, logs:DeleteLogGroup, logs:PutRetentionPolicy, logs:TagResource,
+                     logs:GetLogEvents, logs:FilterLogEvents]
+            Resource:
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-agentcore*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-agentcore*:*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:*"
+          # For the untagged-resource check after each deploy.
+          - Sid: TagRead
+            Effect: Allow
+            Action: [tag:GetResources, bedrock:ListTagsForResource, bedrock:GetInferenceProfile]
+            Resource: "*"
+
+  # ---------------------------------------------------------------- budget
+  # Only this experiment's spend: tagged component=agentcore (activate the tag as a
+  # cost allocation tag in Billing, or the filter matches nothing). Alerts; does not stop.
+  Budget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-agentcore"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: {Amount: !Ref BudgetLimitUsd, Unit: USD}
+        CostFilters:
+          TagKeyValue: ["user:component$agentcore"]
+      NotificationsWithSubscribers:
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 50, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref BudgetEmail}]
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref BudgetEmail}]
+        - Notification: {NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref BudgetEmail}]
+
+Outputs:
+  Opus45ProfileArn:
+    Value: !GetAtt Opus45Profile.InferenceProfileArn
+  Haiku45ProfileArn:
+    Value: !GetAtt Haiku45Profile.InferenceProfileArn
+  RuntimeRoleArn:
+    Value: !GetAtt RuntimeRole.Arn
+  BuildRoleArn:
+    Value: !GetAtt BuildRole.Arn

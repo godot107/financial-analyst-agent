@@ -4,6 +4,10 @@ This is the only file that imports `anthropic`. It implements the `Analyst`
 protocol in `graph.py`: choose the metrics, then write the draft. Neither call
 is allowed to produce a number — the planner picks ids from an enum, and the
 writer writes placeholders.
+
+Claude runs on the Claude API or on Amazon Bedrock (`provider` in config.yaml).
+Both use the same SDK and Messages API; only the client and a few request
+fields differ (`_request`).
 """
 
 import time
@@ -19,7 +23,18 @@ from fin_analyst.passages import Passage
 from fin_analyst.trace import Tracer
 
 # Refusal fallbacks: a refused call is finished by the fallback model instead.
+# A Claude API feature; Bedrock doesn't offer it.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# The effort setting on Opus 4.5, where it is still a beta (Bedrock).
+EFFORT_BETA = "effort-2025-11-24"
+
+
+def make_client(settings: Settings):
+    """The SDK client for this provider. Bedrock takes the machine's AWS credentials
+    (or the AgentCore Runtime's role), never an API key."""
+    if settings.provider == "bedrock":
+        return anthropic.AnthropicBedrock(aws_region=settings.bedrock_region)
+    return anthropic.Anthropic()
 
 PLANNER_SYSTEM = """You choose which financial ratios answer a question about one company.
 You never compute, estimate or state a number.
@@ -266,10 +281,11 @@ class ClaudeAnalyst:
 
     def __init__(self, settings: Settings, client=None, refusal_fallbacks: bool = True):
         self.settings = settings
-        self.client = client or anthropic.Anthropic()
+        self.client = client or make_client(settings)
         # A benign financial memo should never be refused, but a refusal would
-        # otherwise end the run; the fallback model finishes it instead.
-        self.refusal_fallbacks = refusal_fallbacks
+        # otherwise end the run; the fallback model finishes it instead. The
+        # Claude API only: on Bedrock a refusal still stops the run (ModelRefused).
+        self.refusal_fallbacks = refusal_fallbacks and settings.provider == "anthropic"
         # Every call's cost, including calls whose reply we then reject, so a
         # failed run still reports what it spent.
         self.spent_usd = 0.0
@@ -277,37 +293,71 @@ class ClaudeAnalyst:
         # swaps in the run's own tracer; this default just collects.
         self.tracer = Tracer()
 
-    def _call(self, node: str, system: str, user: str, tools: list[dict] | None = None):
+    def _request(self, node: str, system: str, user: str, tools: list[dict] | None):
+        """The request for this node, and the betas it needs (empty: none)."""
         settings = self.settings.nodes[node]
         request = dict(
             model=settings.model,
             max_tokens=settings.max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
-            # "summarized" returns a readable summary of the thinking for the trace.
-            # Opus 5 never returns raw thinking, and the default ("omitted") returns
-            # empty blocks. Billing is the same either way.
-            thinking={
-                "type": "adaptive",
-                "display": "summarized" if self.settings.thinking_summaries else "omitted",
-            },
-            output_config={"effort": settings.effort},
         )
         if tools:
             request["tools"] = tools
             request["tool_choice"] = {"type": "tool", "name": tools[0]["name"]}
 
+        if self.settings.provider == "bedrock":
+            model = self.settings.bedrock_model(settings.model)
+            request["model"] = model.invoke_id()
+            # No thinking: Opus 4.5 has no adaptive thinking, and its manual thinking
+            # can't be combined with the forced tool the plan and verify steps use.
+            betas = []
+            if model.effort:
+                request["output_config"] = {"effort": settings.effort}
+                betas.append(EFFORT_BETA)
+            if tools and not model.strict_tools:
+                request["tools"] = [{k: v for k, v in t.items() if k != "strict"} for t in tools]
+            return request, betas
+
+        # "summarized" returns a readable summary of the thinking for the trace.
+        # Opus 5 never returns raw thinking, and the default ("omitted") returns
+        # empty blocks. Billing is the same either way.
+        request["thinking"] = {
+            "type": "adaptive",
+            "display": "summarized" if self.settings.thinking_summaries else "omitted",
+        }
+        request["output_config"] = {"effort": settings.effort}
+        return request, [FALLBACK_BETA] if self.refusal_fallbacks else []
+
+    def _call(self, node: str, system: str, user: str, tools: list[dict] | None = None):
+        settings = self.settings.nodes[node]
+        request, betas = self._request(node, system, user, tools)
+        on_bedrock = self.settings.provider == "bedrock"
+
         started = time.monotonic()
         try:
             if self.refusal_fallbacks:
                 response = self.client.beta.messages.create(
-                    betas=[FALLBACK_BETA], fallbacks="default", **request
+                    betas=betas, fallbacks="default", **request
                 )
+            elif betas:
+                response = self.client.beta.messages.create(betas=betas, **request)
             else:
                 response = self.client.messages.create(**request)
         except anthropic.AuthenticationError:
             raise AnalysisFailed(
-                "the API rejected the key: check ANTHROPIC_API_KEY in .env against the console"
+                "Bedrock rejected the AWS credentials: sign in again (aws login) or check the role"
+                if on_bedrock
+                else "the API rejected the key: check ANTHROPIC_API_KEY in .env against the console"
+            ) from None
+        except anthropic.PermissionDeniedError as denied:
+            if not on_bedrock:
+                raise AnalysisFailed(
+                    f"the API returned 403 on the {node} step: {denied.message}"
+                ) from None
+            raise AnalysisFailed(
+                f"Bedrock refused {request['model']} on the {node} step ({denied.message}): the role "
+                "may lack bedrock:InvokeModel on it, or the account has no access to that model"
             ) from None
         except anthropic.RateLimitError as limited:
             retry_after = limited.response.headers.get("retry-after", "a moment")
@@ -326,6 +376,15 @@ class ClaudeAnalyst:
             ) from None
         except anthropic.APIConnectionError:
             raise AnalysisFailed(f"could not reach the API on the {node} step; check the network") from None
+        except Exception as failed:
+            # Bedrock's client signs each request with botocore, which raises its own
+            # errors when there are no credentials or the sign-in has expired.
+            if on_bedrock and type(failed).__module__.startswith("botocore"):
+                raise AnalysisFailed(
+                    f"no usable AWS credentials for Bedrock on the {node} step "
+                    f"({type(failed).__name__}): sign in with aws login, or check the role"
+                ) from None
+            raise
 
         cost = self.settings.cost_usd(
             settings.model, response.usage.input_tokens, response.usage.output_tokens

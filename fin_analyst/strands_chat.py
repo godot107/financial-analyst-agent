@@ -4,9 +4,10 @@ Interactive use only: a person reads every answer. Anything automated - the API,
 Lambda, batch runs, AuraTrade - stays on the fixed pipeline in graph.py.
 
 This is the only file besides llm.py and the entry points that may import
-Strands (tests/test_llm_isolation.py), and it only ever builds an
-`AnthropicModel`: the agent talks to the Claude API directly, never Bedrock.
-The tools themselves are plain Python in chat_tools.py.
+Strands (tests/test_llm_isolation.py). The agent talks to Claude where
+config.yaml's `provider` says: an `AnthropicModel` for the Claude API, a
+`BedrockModel` for Amazon Bedrock. The tools themselves are plain Python in
+chat_tools.py.
 
 Where the house rules live:
 - hooks, because they must act in the middle of the agent's loop: the spend
@@ -29,11 +30,12 @@ from strands.hooks import (
     BeforeToolCallEvent,
 )
 from strands.models.anthropic import AnthropicModel
+from strands.models.bedrock import BedrockModel
 
 from fin_analyst.chat_tools import ChatToolbox
 from fin_analyst.config import Settings
 from fin_analyst.graph import RUNS, ClaimCheck
-from fin_analyst.llm import FALLBACK_BETA, PLACEHOLDER_RULES, WORD_RULES
+from fin_analyst.llm import EFFORT_BETA, FALLBACK_BETA, PLACEHOLDER_RULES, WORD_RULES
 from fin_analyst.memo import cited_claims
 from fin_analyst.trace import TraceEvent, Tracer
 
@@ -84,9 +86,28 @@ class ChatAnswer(BaseModel):
     trace: list[TraceEvent] = Field(default_factory=list)
 
 
-def build_model(settings: Settings, client_args: dict | None = None) -> AnthropicModel:
-    """Claude through the Anthropic API, set up as config.yaml sets the pipeline's calls."""
+def build_model(
+    settings: Settings, client_args: dict | None = None, boto_session=None
+) -> AnthropicModel | BedrockModel:
+    """Claude for the chat agent, set up as config.yaml sets the pipeline's calls.
+
+    `boto_session` (Bedrock only) lets tests pass fake credentials: BedrockModel
+    resolves credentials as soon as it's built."""
     node = settings.nodes["chat_agent"]
+    if settings.provider == "bedrock":
+        model = settings.bedrock_model(node.model)
+        # Strands calls Bedrock's Converse API; Claude-only fields (the effort beta)
+        # ride in additionalModelRequestFields. No thinking, as in llm.py.
+        extra = {"anthropic_beta": [EFFORT_BETA], "output_config": {"effort": node.effort}}
+        # A session carries its own region; Strands refuses both.
+        where = {"boto_session": boto_session} if boto_session else {"region_name": settings.bedrock_region}
+        return BedrockModel(
+            **where,
+            model_id=model.invoke_id(),
+            max_tokens=node.max_tokens,
+            strict_tools=model.strict_tools,
+            **({"additional_request_fields": extra} if model.effort else {}),
+        )
     return AnthropicModel(
         client_args=client_args or {},
         model_id=node.model,
