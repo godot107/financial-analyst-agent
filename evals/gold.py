@@ -17,6 +17,7 @@ and doesn't say what it mustn't.
 import argparse
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
@@ -188,20 +189,25 @@ def run_on_runtime(questions: list[dict], max_usd: float, invoke=None) -> int:
             print(f"\nStopped: ${spent:.4f} spent, over the ${max_usd:.2f} limit.")
             break
         print(f"\n{case['ticker']}: {case['question']}")
+        started = time.monotonic()
         job = invoke({"ticker": case["ticker"], "question": case["question"],
                       "filings": case.get("filings", 1)})
+        seconds = round(time.monotonic() - started, 1)  # submit -> finished memo, as a caller sees it
         cost = float(job.get("cost_usd") or 0.0)
         spent += cost
         rows = grade_question(case, as_state(job))
         print_rows(rows)
-        print(f"  ${cost:.4f}  job {job.get('id')}")
+        print(f"  ${cost:.4f}  {seconds}s  job {job.get('id')}")
         all_rows += rows
-        record.append({**case, "cost_usd": cost, "job": job.get("id"), "drafts": (job.get("result") or {}).get("drafts"),
+        record.append({**case, "cost_usd": cost, "seconds": seconds, "job": job.get("id"), "drafts": (job.get("result") or {}).get("drafts"),
                        "memo": job.get("memo"),
                        "grades": [{"check": w, "passed": ok, "detail": d} for w, ok, d in rows]})
 
     passed = sum(ok for _, ok, _ in all_rows)
     print(f"\n{passed}/{len(all_rows)} checks passed across {len(record)} questions, ${spent:.4f}.")
+    times = sorted(r["seconds"] for r in record)
+    if times:
+        print(f"Seconds per memo: p50 {times[len(times) // 2]}, max {times[-1]} (first call includes any cold start).")
     out.mkdir(parents=True, exist_ok=True)
     (out / "gold.json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Grades and memos: {out.relative_to(ROOT)}")
