@@ -7,7 +7,7 @@ from fin_analyst.agentcore_client import as_state, invoke_memo
 
 JOB = {
     "id": "20261029abc", "status": "done", "cost_usd": 0.05, "memo": "Net margin rose.",
-    "result": {"metric_ids": ["current_ratio"], "drafts": 2,
+    "result": {"metric_ids": ["current_ratio"], "drafts": 2, "trace": [{"seconds": 0.0}, {"seconds": 12.5}],
                "metrics": [{"fiscal_year": 2025, "value": 1.2}, {"fiscal_year": 2026, "value": None}]},
 }
 
@@ -54,3 +54,22 @@ def test_the_gold_set_grades_runtime_answers_with_the_same_grader(tmp_path, monk
     assert code == 1
     (record,) = json.loads(next(tmp_path.glob("runs/gold-runtime-*/gold.json")).read_text())
     assert record["job"] == "20261029abc" and record["cost_usd"] == 0.05
+    assert record["overhead_seconds"] == round(record["seconds"] - 12.5, 2)
+
+
+def test_a_session_can_be_reused_across_memos():
+    runtime = FakeRuntime()
+    target = ("arn", "live")
+    for _ in range(2):
+        invoke_memo({"ticker": "MSFT", "question": "q"}, caller="gold", client=runtime, target=target,
+                    session="gold-0123456789abcdef0123456789abcdef")
+    invoke_memo({"ticker": "MSFT", "question": "q"}, caller="gold", client=runtime, target=target)
+    ids = [c["runtimeSessionId"] for c in runtime.calls]
+    assert ids[0] == ids[1] and ids[2] != ids[0] and all(len(i) >= 33 for i in ids)
+
+
+def test_overhead_is_the_wait_minus_the_graph():
+    from fin_analyst.agentcore_client import graph_seconds
+
+    assert graph_seconds(JOB) == 12.5
+    assert graph_seconds({"status": "failed", "result": None}) is None

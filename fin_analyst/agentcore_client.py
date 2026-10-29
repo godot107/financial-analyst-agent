@@ -24,7 +24,14 @@ def runtime_target(cloudformation=None) -> tuple[str, str]:
     return out["RuntimeArn"], out["EndpointName"]
 
 
-def invoke_memo(request: dict, caller: str, client=None, target=None) -> dict:
+def new_session(caller: str) -> str:
+    """A Runtime session id (33+ characters). Reuse one for a caller's run of memos: the
+    session keeps its container, and the container keeps its key, until the idle timeout
+    (300 s). A new session per memo costs a fresh microVM and key fetch, ~2.7 s each."""
+    return f"{caller}-{uuid.uuid4()}"
+
+
+def invoke_memo(request: dict, caller: str, client=None, target=None, session: str | None = None) -> dict:
     """One memo, run to completion on the Runtime. Returns the finished job."""
     import boto3
 
@@ -33,7 +40,7 @@ def invoke_memo(request: dict, caller: str, client=None, target=None) -> dict:
     response = client.invoke_agent_runtime(
         agentRuntimeArn=arn,
         qualifier=endpoint,
-        runtimeSessionId=f"memo-{uuid.uuid4()}",  # 33+ characters; one session per memo
+        runtimeSessionId=session or new_session(caller),
         runtimeUserId=caller,
         contentType="application/json",
         accept="application/json",
@@ -54,3 +61,9 @@ def as_state(job: dict) -> SimpleNamespace:
         # The grader counts drafts; the job reports how many there were.
         drafts=[None] * int(result.get("drafts") or 0),
     )
+
+
+def graph_seconds(job: dict) -> float | None:
+    """How long the graph itself ran (its trace's last event), whichever service ran it."""
+    trace = (job.get("result") or {}).get("trace") or []
+    return trace[-1]["seconds"] if trace else None

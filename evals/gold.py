@@ -119,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="send each question to the AgentCore Runtime instead of running it here")
     parser.add_argument("--lambda", dest="lambda_", action="store_true",
                         help="send each question to the Lambda stack's function URL instead")
+    parser.add_argument("--first", type=int, metavar="N", help="only the first N questions")
     args = parser.parse_args(argv)
 
     load_dotenv(ROOT / ".env")
@@ -132,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if passed == len(rows) else 1
 
     questions = [q for q in gold["questions"] if not args.only or q["ticker"] == args.only.upper()]
+    if args.first:
+        questions = questions[: args.first]
     if not args.spend:
         for case in questions:
             print(f"  {case['ticker']:5} {case['question']}")
@@ -181,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if passed == len(all_rows) else 1
 
 
-def lambda_invoker(poll_seconds: float = 1.0, limit: float = 600.0):
+def lambda_invoker(poll_seconds: float = 0.25, limit: float = 600.0):
     """Submit to the Lambda stack and poll until the job finishes, as its callers do.
     Signed and keyed exactly as deploy/call.py does (it reads FA_URL, FA_API_KEY, FA_REGION)."""
     import importlib.util
@@ -228,9 +231,11 @@ def run_on_runtime(questions: list[dict], max_usd: float, invoke=None, label: st
     """The paid level through a deployed service (AgentCore Runtime, or the Lambda stack
     with label="lambda"): same questions, same grader, the memo written in the cloud.
     Run records stay in the service's jobs bucket; grades and timings come here."""
-    from fin_analyst.agentcore_client import as_state, invoke_memo
+    from fin_analyst.agentcore_client import as_state, graph_seconds, invoke_memo, new_session
 
-    invoke = invoke or (lambda request: invoke_memo(request, caller="gold"))
+    if invoke is None:
+        session = new_session("gold")  # one session for the run: a warm container and key
+        invoke = lambda request: invoke_memo(request, caller="gold", session=session)  # noqa: E731
     out = ROOT / "runs" / f"gold-{label}-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
     spent, all_rows, record = 0.0, [], []
     for case in questions:
@@ -242,13 +247,17 @@ def run_on_runtime(questions: list[dict], max_usd: float, invoke=None, label: st
         job = invoke({"ticker": case["ticker"], "question": case["question"],
                       "filings": case.get("filings", 1)})
         seconds = round(time.monotonic() - started, 1)  # submit -> finished memo, as a caller sees it
+        graph = graph_seconds(job)
+        # The platform's share: everything the caller waited for that wasn't the graph running.
+        overhead = round(seconds - graph, 2) if graph is not None else None
         cost = float(job.get("cost_usd") or 0.0)
         spent += cost
         rows = grade_question(case, as_state(job))
         print_rows(rows)
-        print(f"  ${cost:.4f}  {seconds}s  job {job.get('id')}")
+        print(f"  ${cost:.4f}  {seconds}s (overhead {overhead}s)  job {job.get('id')}")
         all_rows += rows
-        record.append({**case, "cost_usd": cost, "seconds": seconds, "job": job.get("id"), "drafts": (job.get("result") or {}).get("drafts"),
+        record.append({**case, "cost_usd": cost, "seconds": seconds, "overhead_seconds": overhead,
+                       "job": job.get("id"), "drafts": (job.get("result") or {}).get("drafts"),
                        "memo": job.get("memo"),
                        "grades": [{"check": w, "passed": ok, "detail": d} for w, ok, d in rows]})
 
@@ -257,6 +266,12 @@ def run_on_runtime(questions: list[dict], max_usd: float, invoke=None, label: st
     times = sorted(r["seconds"] for r in record)
     if times:
         print(f"Seconds per memo: p50 {times[len(times) // 2]}, max {times[-1]} (first call includes any cold start).")
+    overheads = sorted(r["overhead_seconds"] for r in record if r["overhead_seconds"] is not None)
+    if overheads:
+        import statistics
+
+        print(f"Platform overhead (caller's wait minus the graph): median {statistics.median(overheads):.2f}s, "
+              f"all {overheads}")
     out.mkdir(parents=True, exist_ok=True)
     (out / "gold.json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Grades and memos: {out.relative_to(ROOT)}")
