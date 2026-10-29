@@ -6,6 +6,7 @@ Two levels, because they cost very different amounts:
     python evals/gold.py            # show what the full run would ask and what it may spend
     python evals/gold.py --spend    # the full workflow for every question, about $0.05 each
     python evals/gold.py --spend --runtime   # the same, each memo through AgentCore Runtime
+    python evals/gold.py --spend --lambda    # the same, each memo through the Lambda stack
 
 The free level checks what Python is responsible for: that each line item came
 from the right tag, and that each ratio is the textbook formula over those
@@ -116,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", metavar="TICKER", help="just this company's questions")
     parser.add_argument("--runtime", action="store_true",
                         help="send each question to the AgentCore Runtime instead of running it here")
+    parser.add_argument("--lambda", dest="lambda_", action="store_true",
+                        help="send each question to the Lambda stack's function URL instead")
     args = parser.parse_args(argv)
 
     load_dotenv(ROOT / ".env")
@@ -138,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.runtime:
         return run_on_runtime(questions, args.max_usd)
+    if args.lambda_:
+        return run_on_runtime(questions, args.max_usd, invoke=lambda_invoker(), label="lambda")
 
     from fin_analyst.config import load_settings
     from fin_analyst.edgar import describe_filing
@@ -176,13 +181,50 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if passed == len(all_rows) else 1
 
 
-def run_on_runtime(questions: list[dict], max_usd: float, invoke=None) -> int:
-    """The paid level through AgentCore Runtime: same questions, same grader, the memo
-    written in the cloud. Run records stay in the Runtime's jobs bucket; grades come here."""
+def lambda_invoker(poll_seconds: float = 1.0, limit: float = 600.0):
+    """Submit to the Lambda stack and poll until the job finishes, as its callers do.
+    Signed and keyed exactly as deploy/call.py does (it reads FA_URL, FA_API_KEY, FA_REGION)."""
+    import importlib.util
+    import os
+
+    from dotenv import dotenv_values
+
+    import boto3
+
+    if "FA_URL" not in os.environ:
+        outputs = boto3.client("cloudformation").describe_stacks(StackName="fin-analyst-app")["Stacks"][0]["Outputs"]
+        os.environ["FA_URL"] = next(o["OutputValue"] for o in outputs if o["OutputKey"] == "FunctionUrl")
+    if "FA_API_KEY" not in os.environ:  # the first key in .env, as call.sh picks it
+        first = (dotenv_values(ROOT / ".env").get("FIN_ANALYST_API_KEYS") or "").split(",")[0]
+        os.environ["FA_API_KEY"] = first.split("=", 1)[-1]
+    os.environ.setdefault("FA_REGION", "us-east-1")
+    spec = importlib.util.spec_from_file_location("deploy_call", ROOT / "deploy" / "call.py")
+    call = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(call)
+
+    def invoke(request: dict) -> dict:
+        status, accepted = call.call("POST", "/v1/memos", request)
+        if status != 202:
+            return {"status": "failed", "error": f"HTTP {status}: {accepted}"}
+        started = time.monotonic()
+        while time.monotonic() - started < limit:
+            status, job = call.call("GET", accepted["status_url"])
+            if status == 200 and job["status"] in ("done", "failed"):
+                return job
+            time.sleep(poll_seconds)
+        return {"status": "failed", "error": f"still running after {limit:.0f}s"}
+
+    return invoke
+
+
+def run_on_runtime(questions: list[dict], max_usd: float, invoke=None, label: str = "runtime") -> int:
+    """The paid level through a deployed service (AgentCore Runtime, or the Lambda stack
+    with label="lambda"): same questions, same grader, the memo written in the cloud.
+    Run records stay in the service's jobs bucket; grades and timings come here."""
     from fin_analyst.agentcore_client import as_state, invoke_memo
 
     invoke = invoke or (lambda request: invoke_memo(request, caller="gold"))
-    out = ROOT / "runs" / f"gold-runtime-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
+    out = ROOT / "runs" / f"gold-{label}-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
     spent, all_rows, record = 0.0, [], []
     for case in questions:
         if spent >= max_usd:
