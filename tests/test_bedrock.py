@@ -113,15 +113,35 @@ def test_the_client_matches_the_provider(bedrock, monkeypatch):
 # --- the request ----------------------------------------------------------------
 
 
-def test_opus_45_gets_effort_through_its_beta_and_no_thinking(bedrock):
+def test_opus_45_gets_effort_through_its_beta_and_manual_thinking_when_writing(bedrock):
     client = FakeClient(reply(text("ok")))
     ClaudeAnalyst(bedrock, client=client).write_draft("MSFT", "q", [], [])
     api, request = client.requests[0]
     assert api == "beta" and request["betas"] == [EFFORT_BETA]
     assert request["model"] == OPUS_45
     assert request["output_config"] == {"effort": "medium"}
-    assert "thinking" not in request  # no adaptive thinking on Opus 4.5
+    # manual thinking (no adaptive on Opus 4.5); the memo keeps its own 1500-token ceiling
+    assert request["thinking"] == {"type": "enabled", "budget_tokens": 2048}
+    assert request["max_tokens"] == 1500 + 2048
     assert "fallbacks" not in request  # a Claude API feature
+
+
+def test_a_step_that_forces_a_tool_never_thinks(bedrock):
+    bedrock.bedrock_thinking["plan"] = 2048  # even if configured, a forced tool forbids it
+    client = FakeClient(reply(tool_use(metric_ids=["current_ratio"])))
+    ClaudeAnalyst(bedrock, client=client).choose_metrics("MSFT", "How liquid?")
+    request = client.requests[0][1]
+    assert "thinking" not in request and request["max_tokens"] == 512
+
+
+def test_a_thinking_budget_below_the_minimum_is_refused(tmp_path, monkeypatch):
+    from fin_analyst.config import CONFIG_PATH
+
+    monkeypatch.setenv("FIN_ANALYST_PROVIDER", "bedrock")
+    config = tmp_path / "config.yaml"
+    config.write_text(CONFIG_PATH.read_text().replace("    write: 2048", "    write: 500"))
+    with pytest.raises(ValueError, match="at least 1024"):
+        load_settings(config)
 
 
 def test_the_planner_still_forces_its_strict_tool(bedrock):

@@ -58,6 +58,8 @@ class Settings:
     provider: str = "anthropic"
     bedrock_region: str = "us-east-1"
     bedrock_models: dict[str, BedrockModel] = field(default_factory=dict)
+    # node -> manual thinking budget on Bedrock (nodes that force a tool can't think)
+    bedrock_thinking: dict[str, int] = field(default_factory=dict)
 
     def bedrock_model(self, model: str) -> BedrockModel:
         if model not in self.bedrock_models:
@@ -94,6 +96,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         },
         provider=provider,
         bedrock_region=bedrock.get("region", "us-east-1"),
+        bedrock_thinking={node: int(n) for node, n in (bedrock.get("thinking_budget") or {}).items()},
         bedrock_models={
             name: BedrockModel(
                 id=model["id"],
@@ -139,4 +142,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
             raise ValueError(f"node '{name}' needs a positive max_tokens")
         if provider == "bedrock" and node.model not in settings.bedrock_models:
             raise ValueError(f"node '{name}' uses {node.model}, which has no bedrock.models entry")
+    for node, budget in settings.bedrock_thinking.items():
+        if node not in settings.nodes or budget < 1024:
+            raise ValueError(f"thinking_budget for '{node}': the node must exist and the budget be at least 1024")
     return settings

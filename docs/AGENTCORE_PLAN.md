@@ -261,3 +261,13 @@ scores.
   (4 each); the gap is in content: 3 misses vs 1, and one memo not published. Opus 4.5 cost 35%
   less. One run each, so the gap is within noise, but the rule was fixed in advance and is applied
   as written: **the model, not the platform, blocks the move. No Lambda teardown.**
+
+### Retry arm, registered before running (2026-10-29)
+
+One pre-registered retry, Willie's choice (option 1). **Change:** on Bedrock, the `write` node
+gets manual thinking (`thinking_budget.write: 2048`, its ceiling raised to 1500 + 2048); plan and
+verify unchanged (a forced tool can't think). Everything else as the 36/43 run: same code
+otherwise, same 12 questions, same filings (cached), Opus 4.5 through the global profile.
+**Pass bar, fixed now:** at least **37/43** checks (within one of Opus 5's 38) **and all 12 memos
+published**. Cost cap $1.00 (`--max-usd`). Pass → decision rule 1 holds and Phase 2 starts; fail →
+the model blocks the move, as recorded above, and no further model retries are run.

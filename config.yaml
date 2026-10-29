@@ -38,6 +38,12 @@ bedrock:
     write: claude-opus-4-5
     verify: claude-opus-4-5
     chat_agent: claude-opus-4-5
+  # Manual thinking, in tokens, for nodes that don't force a tool (only `write`):
+  # Opus 4.5 has no adaptive thinking, and plan/verify force a tool, which thinking
+  # can't be combined with. The node's max_tokens is raised by the budget, so the
+  # memo keeps its own ceiling. Retry arm after Phase 1 (docs/AGENTCORE_PLAN.md).
+  thinking_budget:
+    write: 2048
   # id: the cross-region (global) inference profile, called when profile_env is unset.
   # profile_env: names the variable holding a tagged application inference profile
   #   ARN (CloudFormation sets it on the Runtime), so spend is tagged project=fin-analyst.

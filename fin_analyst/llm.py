@@ -309,9 +309,14 @@ class ClaudeAnalyst:
         if self.settings.provider == "bedrock":
             model = self.settings.bedrock_model(settings.model)
             request["model"] = model.invoke_id()
-            # No thinking: Opus 4.5 has no adaptive thinking, and its manual thinking
-            # can't be combined with the forced tool the plan and verify steps use.
+            # Opus 4.5 has no adaptive thinking, and manual thinking can't be combined
+            # with the forced tool the plan and verify steps use. Nodes given a budget
+            # (write) think manually; the budget is added to their ceiling.
             betas = []
+            budget = self.settings.bedrock_thinking.get(node)
+            if budget and not tools:
+                request["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                request["max_tokens"] = settings.max_tokens + budget
             if model.effort:
                 request["output_config"] = {"effort": settings.effort}
                 betas.append(EFFORT_BETA)
