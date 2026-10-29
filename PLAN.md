@@ -494,6 +494,13 @@ metrics, retrieval, peer and news code), measured against the fixed-pipeline `--
 pre-registered question set. Interactive CLI chat only: the memo pipeline and every automated
 caller (API, Lambda, batch, AuraTrade) are unchanged. Plan: `docs/STRANDS_PLAN.md`.
 
+## Next: the same service on Amazon Bedrock AgentCore (planned)
+
+The unchanged graph hosted on AgentCore Runtime, with Identity, Observability, Evaluations, and
+Gateway + Policy for the chat tools, measured side by side against the Lambda stack (parity,
+latency, cost at rest, glue code) with a decision rule fixed in advance. The Lambda stack keeps
+serving until the decision. Plan: `docs/AGENTCORE_PLAN.md`.
+
 ## 7. Known traps
 
 - **XBRL values are in raw units, not millions.** Format at render time only.
