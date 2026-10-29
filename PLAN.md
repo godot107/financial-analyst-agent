@@ -496,10 +496,12 @@ caller (API, Lambda, batch, AuraTrade) are unchanged. Plan: `docs/STRANDS_PLAN.m
 
 ## Next: the same service on Amazon Bedrock AgentCore (planned)
 
-The unchanged graph hosted on AgentCore Runtime, with Identity, Observability, Evaluations, and
-Gateway + Policy for the chat tools, measured side by side against the Lambda stack (parity,
-latency, cost at rest, glue code) with a decision rule fixed in advance. The Lambda stack keeps
-serving until the decision. Plan: `docs/AGENTCORE_PLAN.md`.
+The unchanged graph hosted on AgentCore Runtime, with Claude through Amazon Bedrock (Opus 4.5;
+Opus 5 isn't available to this account there) instead of the Anthropic API, all infrastructure
+in tagged CloudFormation stacks. Identity, Observability, Evaluations, and Gateway + Policy for the
+chat tools. The model change and the platform change are measured separately against the Lambda
+stack (gold-set quality, latency, cost at rest, glue code), with a decision rule fixed in advance.
+The Lambda stack keeps serving until the decision. Plan: `docs/AGENTCORE_PLAN.md`.
 
 ## 7. Known traps
 
