@@ -16,8 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY config.yaml .
 COPY fin_analyst ./fin_analyst
 
-# Never root. No secrets in the image or the environment: Claude is called with the
-# Runtime's IAM role, and the Alpha Vantage key comes from AgentCore Identity.
+# Never root. No secrets in the image or the environment: the Claude API key comes
+# from AgentCore Identity per container (FIN_ANALYST_PROVIDER=anthropic, set by
+# CloudFormation), or Claude is called with the Runtime's role (bedrock).
 RUN useradd --create-home analyst
 USER analyst
 

@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   fin-analyst on AgentCore Runtime (docs/AGENTCORE_PLAN.md): the memo service's
-  container, Claude through tagged Bedrock inference profiles, its own jobs bucket.
+  container, its Claude API key behind AgentCore Identity (or Claude through tagged
+  Bedrock inference profiles), its own jobs bucket.
   Runs next to the Lambda stack (fin-analyst-app), never instead of it, until the
   plan's decision. Deployed by deploy/agentcore/02_app.sh.
 
@@ -18,6 +19,13 @@ Parameters:
     Type: String
   Haiku45ProfileArn:
     Type: String
+  Provider:
+    Type: String
+    Default: anthropic
+    AllowedValues: [anthropic, bedrock]
+    Description: >-
+      anthropic = Opus 5 through the Claude API, key from AgentCore Identity (the plan's
+      revised path); bedrock = Opus 4.5 through the tagged profiles, no key.
   SecUserAgent:
     Type: String
     Default: fin-analyst contact@willieman.com
@@ -67,11 +75,54 @@ Resources:
         - {Key: component, Value: agentcore}
         - {Key: repository, Value: !Ref Repository}
 
+  # The Claude API key. CloudFormation creates the secret with a random placeholder;
+  # deploy/agentcore/03_secret.sh writes the real key from .env on stdin. Updates to
+  # this stack never touch the value (GenerateSecretString runs only at creation).
+  ClaudeKeySecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub "${ProjectName}/agentcore/anthropic-api-key"
+      Description: Claude API key for the AgentCore Runtime, read only through AgentCore Identity.
+      GenerateSecretString:
+        SecretStringTemplate: "{}"
+        GenerateStringKey: api_key
+        ExcludePunctuation: true
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
+  # AgentCore Identity's handle on that key: the container asks for it by name with
+  # the workload token Runtime gives each request (agentcore_app.identity_key_fetcher).
+  ClaudeKeyProvider:
+    Type: AWS::BedrockAgentCore::ApiKeyCredentialProvider
+    Properties:
+      Name: !Sub "${ProjectName}-anthropic"
+      ApiKeySecretSource: EXTERNAL
+      ApiKeySecretConfig:
+        SecretId: !Ref ClaudeKeySecret
+        JsonKey: api_key
+      Tags:
+        - {Key: project, Value: !Ref ProjectName}
+        - {Key: environment, Value: dev}
+        - {Key: owner, Value: williemaize}
+        - {Key: cost-center, Value: personal}
+        - {Key: managed-by, Value: cloudformation}
+        - {Key: component, Value: agentcore}
+        - {Key: repository, Value: !Ref Repository}
+
   Runtime:
     Type: AWS::BedrockAgentCore::Runtime
+    DependsOn: ClaudeKeyProvider  # named in its environment, not referenced
     Properties:
       AgentRuntimeName: fin_analyst_memo  # letters, digits and underscores only
-      Description: fin-analyst memo service (LangGraph, Claude on Bedrock)
+      Description: fin-analyst memo service (LangGraph; Claude API or Bedrock)
       RoleArn: !Ref RuntimeRoleArn
       AgentRuntimeArtifact:
         ContainerConfiguration:
@@ -82,10 +133,11 @@ Resources:
       LifecycleConfiguration:
         IdleRuntimeSessionTimeout: !Ref IdleSessionSeconds
         MaxLifetime: 3600
-      # No secrets: Claude uses this role; the Alpha Vantage key comes through
-      # AgentCore Identity (Phase 3).
+      # No secrets: on the Claude API the key comes through AgentCore Identity per
+      # container; on Bedrock, Claude uses this role.
       EnvironmentVariables:
-        FIN_ANALYST_PROVIDER: bedrock
+        FIN_ANALYST_PROVIDER: !Ref Provider
+        ANTHROPIC_KEY_PROVIDER: !Sub "${ProjectName}-anthropic"  # the name; Ref gives the ARN
         JOBS_BUCKET: !Ref JobsBucket
         FIN_ANALYST_PROFILE_OPUS_4_5: !Ref Opus45ProfileArn
         FIN_ANALYST_PROFILE_HAIKU_4_5: !Ref Haiku45ProfileArn
@@ -124,3 +176,5 @@ Outputs:
     Value: live
   JobsBucket:
     Value: !Ref JobsBucket
+  ClaudeKeySecretArn:
+    Value: !Ref ClaudeKeySecret

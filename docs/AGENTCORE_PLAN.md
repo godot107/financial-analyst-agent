@@ -280,3 +280,30 @@ memo didn't). Rewrites rose from 4 to 8; COST still 3 years. Across the two Opus
 moved 36 → 34, so one run varies by about ±2 checks; Opus 5's 38 is also one run.
 **As registered: the model blocks the move. No further model retries, no Lambda teardown.** The
 config keeps the default of no thinking on Bedrock (the better of the two Opus 4.5 arms).
+
+## Revised plan: AgentCore with the Claude API (decided 2026-10-29)
+
+Opus 5 has no announced date on Bedrock, and the model blocks the Bedrock move. Willie chose to
+keep testing the platform with the model memos use today: **AgentCore Runtime calling Opus 5
+through the Claude API** (`provider: anthropic` on the Runtime). The Bedrock path stays in the code
+and the two tagged profiles stay deployed, for when Opus 5 reaches Bedrock or for a Haiku 4.5
+judge in Phase 4.
+
+What this gives up: Claude spend stays on the Anthropic bill (not tagged in Cost Explorer), and
+there is still an API key to fund and rotate.
+
+**The key, through AgentCore Identity (pulled forward from Phase 3).** A Secrets Manager secret
+(CloudFormation, tagged; value written by `deploy/agentcore/03_secret.sh` from `.env` on stdin,
+never printed) behind an `ApiKeyCredentialProvider` (`EXTERNAL` source). Runtime hands the
+container a workload access token per request, which needs the caller to name a user
+(`runtimeUserId` on InvokeAgentRuntime); the container exchanges it with `GetResourceApiKey`. No key
+in the image, the environment or a CloudFormation parameter. Cost: $0.40/month for the secret.
+
+**Decision rule, revised.** Condition 1 (model quality) no longer applies: both stacks run the
+same model. Platform parity: `gold.py --free` identical on both, and the paid gold set through the
+Runtime within **2 checks** of the Lambda's (one run varies by about ±2, measured above). Conditions
+3-5 (cost at rest < $1/month, p95 latency no worse, less glue code) stand.
+
+**If it passes: Lambda teardown plan.** AuraTrade moves from the function URL (SigV4) to
+`InvokeAgentRuntime` with `runtimeUserId` (a change in its private repo, with its own test), one
+week of both stacks serving, then `deploy/99_teardown.sh` for the Lambda stacks and SSM secrets.

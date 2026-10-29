@@ -142,6 +142,11 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/fin_analyst*"
                   - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default"
                   - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/apikeycredentialprovider/fin-analyst*"
+              # The Claude API key behind that credential provider (EXTERNAL secret source).
+              - Sid: ClaudeKeySecret
+                Effect: Allow
+                Action: [secretsmanager:GetSecretValue, secretsmanager:DescribeSecret]
+                Resource: !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ProjectName}/agentcore/*"
       Tags:
         - {Key: project, Value: !Ref ProjectName}
         - {Key: environment, Value: dev}
@@ -254,6 +259,18 @@ Resources:
               - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-agentcore*:*"
               - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
               - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:*"
+          # The Claude API key's secret: created by the app stack, value written by
+          # 03_secret.sh. Never readable through any other path.
+          - Sid: OwnSecret
+            Effect: Allow
+            Action: [secretsmanager:CreateSecret, secretsmanager:DeleteSecret, secretsmanager:DescribeSecret,
+                     secretsmanager:GetSecretValue, secretsmanager:PutSecretValue, secretsmanager:UpdateSecret,
+                     secretsmanager:TagResource, secretsmanager:UntagResource]
+            Resource: !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ProjectName}/agentcore/*"
+          - Sid: RandomPlaceholder  # GenerateSecretString's first value, before the real key
+            Effect: Allow
+            Action: secretsmanager:GetRandomPassword
+            Resource: "*"
           # For the untagged-resource check after each deploy.
           - Sid: TagRead
             Effect: Allow

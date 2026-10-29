@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The Runtime, its endpoint and its jobs bucket, on the image built by 01_build.sh.
-# Previews the change set unless --execute. Costs nothing until it's invoked
-# (plus storage); invoking it spends Bedrock tokens: ask first.
+# Previews the change set unless --execute; then run 03_secret.sh. Costs nothing until it's invoked
+# (plus storage and the $0.40/month secret); invoking it spends Claude tokens: ask first.
 source "$(dirname "$0")/common.sh"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
 IMAGE="$(stack_output "$AC_BUILD_STACK" RepositoryUri):$SHA"

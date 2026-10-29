@@ -3,7 +3,7 @@
     .venv/bin/python deploy/agentcore/invoke.py MSFT "How liquid is Microsoft?"          # shows the cost, asks
     .venv/bin/python deploy/agentcore/invoke.py MSFT "How liquid is Microsoft?" --yes    # no prompt
 
-A memo on Opus 4.5 is estimated at a few cents (the service's own estimate is printed).
+A memo is estimated at a few cents (the service's own estimate is printed).
 Ask Willie before running it.
 """
 
@@ -40,6 +40,9 @@ def main(argv=None) -> int:
         agentRuntimeArn=out["RuntimeArn"],
         qualifier=out["EndpointName"],
         runtimeSessionId=f"memo-{uuid.uuid4()}",  # 33+ characters; one session per memo
+        # Naming a user makes Runtime hand the container a workload access token, which
+        # AgentCore Identity exchanges for the Claude API key.
+        runtimeUserId="cli",
         contentType="application/json",
         accept="application/json",
         payload=json.dumps({**request.model_dump(), "caller": "cli"}).encode(),
